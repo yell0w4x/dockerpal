@@ -1,0 +1,82 @@
+
+#!/usr/bin/env bash
+
+SCRIPT_DIR=$(realpath "$(dirname "${0}")")
+VENV_DIR=${SCRIPT_DIR}/.venv-build
+POSITIONAL=()
+
+
+usage() {
+cat << EOF
+Build and push library to pypi index.
+
+Usage:
+    ${0} [OPTIONS] [EXTRA_ARGS]
+
+All the EXTRA_ARGS are passed to twine. 
+Credentials are in ~/.pypirc.
+
+Options:
+    --push      Push to pypi
+    --test      Use test pypi
+    --debug     Set bash 'x' option
+    --help      Shows help message
+EOF
+}
+
+while [ "${#}" -gt 0 ]; do
+    case "${1}" in
+        -h|--help)
+            usage
+            exit
+            ;;
+
+        --test)
+            USE_TEST_PYPI=1
+            ;;
+
+        --push)
+            PUSH=1
+            ;;
+
+        --debug)
+            set -x
+            ;;
+
+        *)
+            POSITIONAL+=("${1}")
+            ;;
+    esac
+    
+   shift
+done
+
+set -eu
+
+VERSION="$(cat ${SCRIPT_DIR}/VERSION)"
+sed -E -i "s/version = [0-9]+\.[0-9]+\.[0-9]+/version = ${VERSION}/g" "${SCRIPT_DIR}/setup.cfg"
+sed -E -i "s/__version__ = '[0-9]+\.[0-9]+\.[0-9]+'/__version__ = '${VERSION}'/g" "${SCRIPT_DIR}/src/dockerpal/__init__.py"
+
+if [ -d "${VENV_DIR}" ]; then
+    source "${VENV_DIR}/bin/activate"
+else
+    python3 -m venv "${VENV_DIR}" && \
+    source "${VENV_DIR}/bin/activate" && \
+    pip3 install build==0.10.0 twine==3.7.1
+fi
+
+rm -rf "${SCRIPT_DIR}/dist"
+cd "${SCRIPT_DIR}"
+python -m build
+
+if [ -z "${PUSH+x}" ]; then
+    exit 0
+fi
+
+if [ -n "${USE_TEST_PYPI+x}" ]; then
+    echo -e "\033[0;33mUsing test repository\033[0m"
+    twine upload --repository testpypi "${SCRIPT_DIR}/dist/*" "${POSITIONAL[@]}"
+else
+    echo -e "\033[0;33mUsing production repository\033[0m"
+    twine upload "${SCRIPT_DIR}/dist/*" "${POSITIONAL[@]}"
+fi
