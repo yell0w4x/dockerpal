@@ -1,23 +1,11 @@
-from textual.app import App, ComposeResult
-from textual.containers import Grid
-from textual.widgets import DataTable, Footer, Header, Static, Label, Button, TextArea, ListView, ListItem
-from textual.color import Color
+from textual.app import App
 from textual.theme import Theme
 from textual import events
-from textual.screen import Screen, ModalScreen
 from textual._context import active_app
-from textual.reactive import reactive
-from textual.containers import Horizontal, VerticalGroup, Vertical, VerticalScroll, Container
-from textual.binding import Binding
-from textual import on, work
-from python_event_bus import EventBus
-from time import monotonic
-from rich.text import Text
-from rich.style import Style
 
 import docker
 
-from dockerpal.screens.fsm import ScreenFSM, SplashScreen
+from dockerpal.fsm import ScreenFSM, SplashScreen, ErrorScreen
 
 
 arctic_theme = Theme(
@@ -70,7 +58,7 @@ class DockerPalApp(App):
         # background: dodgerblue;
     }
 
-    #initializing-label,#not-implemented-label {
+    #initializing-label,#not-implemented-label,#error-label {
         column-span: 2;
         height: 1fr;
         width: 1fr;
@@ -80,16 +68,17 @@ class DockerPalApp(App):
 
     def __init__(self):
         super().__init__()
+        self.__fsm = None
         active_app.set(self)
-
-        cli = docker.from_env()
-        self.__fsm = ScreenFSM(cli)
 
 
     def on_key(self, event: events.Key):
         match event.key:
             case 'q':
                 self.exit()
+
+        if self.__fsm is None:
+            return
 
         self.__fsm.on_state_key(event)
 
@@ -98,10 +87,16 @@ class DockerPalApp(App):
         self.title = 'DockerPal'
         self.register_theme(arctic_theme)
         self.theme = 'arctic'
-        self.push_screen(SplashScreen())
 
-        # loop = asyncio.get_running_loop()
-        # images_list =  await loop.run_in_executor(None, lambda: self.__docker_cli.images.list())
+        try:
+            cli = docker.from_env()
+        except Exception as e:
+            self.push_screen(ErrorScreen(f"Error connecting to Docker: {e}"))
+            return
+        else:
+            self.__fsm = ScreenFSM(cli)
+
+        self.push_screen(SplashScreen())
         self.__fsm.set_images_screen()
 
 

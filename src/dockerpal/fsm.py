@@ -1,3 +1,4 @@
+import docker
 from textual.containers import Grid
 from textual.widgets import DataTable, Footer, Header, Label, Button, TextArea, ListView, ListItem
 from textual import events
@@ -179,7 +180,7 @@ class ImagesScreen(Screen, ScreenStateBase):
         images = self.__cli.images.list() if images_list is None else images_list
         table = self.__table
         table.clear()
-        pad = self.__num_space_pad = len(str(len(images))) + len(self.SELECTED_SYMBOL) + 1
+        pad = self.__num_space_pad = len(str(len(images))) + len(self.SELECTED_SYMBOL) + 2
         {table.add_row(short_id(image), tag(image), key=full_id(image), label=f'{i: <{pad}}'): image for i, image in enumerate(images, 1)}
         self.__update_footer()
 
@@ -301,16 +302,19 @@ class ImagesScreen(Screen, ScreenStateBase):
         table = self.__table
         sel_rows = self.__selected_rows
         cursor_row = table.cursor_row
-        if not sel_rows:
-            remove_image(cursor_row)
+        try:
+            if not sel_rows:
+                remove_image(cursor_row)
+            else:
+                for i in sel_rows:
+                    remove_image(i)
+                sel_rows.clear()
+        except docker.errors.APIError as e:
+            self.context().notify(e.explanation, severity='error')
         else:
-            for i in sel_rows:
-                remove_image(i)
-            sel_rows.clear()
-
-        self.renew()
-        self.__set_cursor_row(cursor_row)
-        self.__update_selected_label()
+            self.renew()
+            self.__set_cursor_row(cursor_row)
+            self.__update_selected_label()
 
 
     def action_refresh(self):
@@ -398,16 +402,16 @@ class ImageDetailsScreen(Screen, ScreenStateBase):
 
     def compose(self):
         try:        
-            details = str(self.__image.attrs).replace('"', r'\"').replace("'", '"').replace('False', 'false').replace('True', 'true')
-            details = json.dumps(json.loads(details), indent=4)
             yield from compose_sidebar()
             yield Header()
-            yield TextArea(details, read_only=True, language='json', id='image-details')
             yield Footer()
+            details = json.dumps(self.__image.attrs, indent=4)
+            yield TextArea(details, read_only=True, language='json', id='image-details')
         except json.JSONDecodeError as e:
-            yield TextArea(f'Unable to parse image details: {e}', read_only=True, language='html')
+            yield TextArea(f'Unable to parse image details: {e}', read_only=True, language='html', id='image-details')
             self.context().notify(f'Unable to parse image details: {e}', severity='error')
         except Exception as e:
+            yield TextArea(f'Unable to parse image details: {e}', read_only=True, language='html', id='image-details')
             self.context().notify(str(e), severity='error')
 
 
@@ -439,6 +443,22 @@ class SplashScreen(Screen):
 class NotImplementedScreen(Screen):
     def compose(self):
         yield Grid(Label("Not Implemented", id='not-implemented-label'), id="not-implemented-screen")
+
+
+class ErrorScreen(Screen):
+    BINDINGS = [
+        Binding("q,escape", "exit", "Exit"),
+    ]
+
+    def __init__(self, message, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__message = message
+
+    def action_exit(self):
+        self.app.exit()
+
+    def compose(self):
+        yield Grid(Label(self.__message, id='error-label'), id="error-screen")
 
 
 class QuitScreen(ModalScreen):
