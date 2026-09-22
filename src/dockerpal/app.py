@@ -132,6 +132,26 @@ class DockerPalApp(App):
         color: $block-cursor-foreground;
     }
 
+    PromptScreen {
+        align: center middle;
+    }
+
+    #prompt-dialog {
+        grid-size: 1;
+        grid-rows: 3 3;
+        padding: 0 1;
+        width: 60;
+        height: 8;
+        border: thick $primary 80%;
+        background: $surface;
+    }
+
+    #prompt-title {
+        width: 1fr;
+        content-align: center middle;
+        text-style: bold;
+    }
+
     #dialog {
         grid-size: 2;
         grid-gutter: 1 2;

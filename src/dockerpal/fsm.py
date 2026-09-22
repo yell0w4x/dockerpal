@@ -22,6 +22,14 @@ from dockerpal import clipboard
 SIDEBAR_ITEMS = ('images', 'containers', 'networks', 'volumes')
 
 
+def split_image_name(name):
+    """Split 'repo:tag' into its parts, leaving a registry port alone."""
+    repository, sep, tag = name.rpartition(':')
+    if not sep or '/' in tag:
+        return name, 'latest'
+    return repository, tag
+
+
 def compose_sidebar(current=None):
     """Yield the sidebar list, highlighting ``current`` (e.g. 'containers')."""
     index = SIDEBAR_ITEMS.index(current) if current in SIDEBAR_ITEMS else 0
@@ -392,8 +400,15 @@ class ResourceScreen(Screen, ScreenStateBase):
         self.__confirm_remove('Force remove', force=True)
 
     def action_details(self):
-        if self._table.row_count > 0:
-            self.open_details(self.__get_row_item(self._table.cursor_row))
+        item = self.cursor_item()
+        if item is not None:
+            self.open_details(item)
+
+    def cursor_item(self):
+        """The item under the cursor, or None when the table is empty."""
+        if self._table.row_count == 0:
+            return None
+        return self.__get_row_item(self._table.cursor_row)
 
     def action_actions(self):
         """Show the actions menu for the current selection."""
@@ -618,6 +633,7 @@ class ContainersScreen(ResourceScreen):
         ('Start', 'start', 'u'),
         ('Stop', 'stop', 'x'),
         ('Restart', 'restart', 't'),
+        ('Commit as image', 'commit', 'c'),
         ('Remove', 'delete', 'd'),
         ('Force remove', 'force_delete', ''),
         ('Details', 'details', 'enter'),
@@ -627,6 +643,7 @@ class ContainersScreen(ResourceScreen):
         Binding("u", "start", "Start"),
         Binding("x", "stop", "Stop"),
         Binding("t", "restart", "Restart"),
+        Binding("c", "commit", "Commit"),
     ] + ResourceScreen.BINDINGS
 
     def action_start(self):
@@ -637,6 +654,33 @@ class ContainersScreen(ResourceScreen):
 
     def action_restart(self):
         self.apply_to_selection(lambda key: self.get_item(key).restart())
+
+    def action_commit(self):
+        """Commit the container under the cursor as a new image.
+
+        One image needs one name, so this works on the cursor row rather than
+        the whole selection; the prompt says which container it is."""
+        container = self.cursor_item()
+        if container is None:
+            return
+
+        def on_name(name):
+            if name:
+                self.__commit(container, name)
+            self.focus_main()
+
+        self.app.push_screen(PromptScreen(f'Commit {container.name} as:',
+                                          f'{container.name}:latest'), on_name)
+
+    def __commit(self, container, name):
+        repository, tag = split_image_name(name)
+        try:
+            image = container.commit(repository=repository, tag=tag)
+        except docker.errors.APIError as e:
+            self.context().notify(e.explanation or str(e), severity='error')
+        else:
+            short_id = image.short_id.split(':')[-1]
+            self.context().notify(f'Committed {container.name} as {repository}:{tag} ({short_id})')
 
     def list_items(self):
         return self._cli.containers.list(all=True)
@@ -887,6 +931,35 @@ class ActionsMenu(ModalScreen[str]):
 
     def on_list_view_selected(self, event: ListView.Selected):
         self.dismiss(event.item.id.removeprefix('action-'))
+
+
+class PromptScreen(ModalScreen[str]):
+    """Ask for a single line of text; dismisses with it, or None when cancelled."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    def __init__(self, title, value=''):
+        super().__init__(id='prompt-screen')
+        self.__title = title
+        self.__value = value
+
+    def compose(self):
+        yield Grid(
+            Label(self.__title, id='prompt-title'),
+            Input(value=self.__value, id='prompt-input'),
+            id='prompt-dialog',
+        )
+
+    def on_mount(self):
+        self.query_one('#prompt-input', Input).focus()
+
+    def action_cancel(self):
+        self.dismiss(None)
+
+    def on_input_submitted(self, event: Input.Submitted):
+        self.dismiss(event.value.strip())
 
 
 class ConfirmScreen(ModalScreen[bool]):

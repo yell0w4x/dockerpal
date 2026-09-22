@@ -63,6 +63,10 @@ class FakeContainer:
         self.calls.append('restart')
         self.status = 'running'
 
+    def commit(self, repository=None, tag=None, **kwargs):
+        self.calls.append(('commit', repository, tag))
+        return FakeImage('c0mm17'.ljust(64, '0'), tags=[f'{repository}:{tag}'])
+
     def remove(self, **kwargs):
         if self.status == 'running' and not kwargs.get('force'):
             raise docker.errors.APIError(

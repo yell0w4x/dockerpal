@@ -30,6 +30,11 @@ async def choose(pilot, index):
     await pilot.pause()
 
 
+async def choose_action(pilot, app, label):
+    """Pick a menu entry by its label, so tests do not depend on its position."""
+    await choose(pilot, menu_labels(app).index(label))
+
+
 async def test_a_opens_the_actions_menu_for_containers(client):
     app = DockerPalApp(docker_cli=client)
     async with app.run_test() as pilot:
@@ -38,7 +43,8 @@ async def test_a_opens_the_actions_menu_for_containers(client):
         await open_menu(pilot)
         assert app.screen.id == 'actions-menu'
         assert menu_labels(app) == [
-            'Start', 'Stop', 'Restart', 'Remove', 'Force remove', 'Details',
+            'Start', 'Stop', 'Restart', 'Commit as image',
+            'Remove', 'Force remove', 'Details',
         ]
         assert menu_title(app) == 'Actions: 1 container'
 
@@ -59,7 +65,7 @@ async def test_choosing_stop_stops_the_container(client, containers):
         await pilot.pause()
         await goto_containers(pilot)
         await open_menu(pilot)
-        await choose(pilot, 1)          # Stop
+        await choose_action(pilot, app, 'Stop')
         assert app.screen.id == 'containers-screen'
         assert containers[0].calls == ['stop']
         assert app.screen.query_one(DataTable).get_row_at(0)[2] == 'exited'
@@ -72,7 +78,7 @@ async def test_choosing_start_starts_the_container(client, containers):
         await goto_containers(pilot)
         await pilot.press('j')
         await open_menu(pilot)
-        await choose(pilot, 0)          # Start
+        await choose_action(pilot, app, 'Start')
         assert containers[1].calls == ['start']
 
 
@@ -83,7 +89,7 @@ async def test_choosing_remove_asks_for_confirmation(client, containers):
         await goto_containers(pilot)
         await pilot.press('j')
         await open_menu(pilot)
-        await choose(pilot, 3)          # Remove
+        await choose_action(pilot, app, 'Remove')
         assert app.screen.id == 'confirm-screen'
         assert 'Remove 1 container?' in str(app.screen.query_one('#question', Label).content)
         await pilot.press('y')
@@ -97,7 +103,7 @@ async def test_force_remove_kills_a_running_container(client, containers):
         await pilot.pause()
         await goto_containers(pilot)
         await open_menu(pilot)
-        await choose(pilot, 4)          # Force remove
+        await choose_action(pilot, app, 'Force remove')
         assert 'Force remove 1 container?' in str(app.screen.query_one('#question', Label).content)
         await pilot.press('y')
         await pilot.pause()
@@ -111,7 +117,7 @@ async def test_choosing_details_opens_the_details_screen(client):
         await pilot.pause()
         await goto_containers(pilot)
         await open_menu(pilot)
-        await choose(pilot, 5)          # Details
+        await choose_action(pilot, app, 'Details')
         assert app.screen.id == 'details-screen'
         assert app.sub_title == 'Container details'
 
@@ -183,7 +189,7 @@ async def test_menu_acts_on_the_whole_selection(client, containers):
         await goto_containers(pilot)
         await pilot.press('+')
         await open_menu(pilot)
-        await choose(pilot, 2)          # Restart
+        await choose_action(pilot, app, 'Restart')
         assert containers[0].calls == ['restart']
         assert containers[1].calls == ['restart']
 
@@ -198,7 +204,7 @@ async def test_menu_shows_the_keyboard_shortcuts(client):
         await pilot.pause()
         await goto_containers(pilot)
         await open_menu(pilot)
-        assert menu_keys(app) == ['u', 'x', 't', 'd', '', 'enter']
+        assert menu_keys(app) == ['u', 'x', 't', 'c', 'd', '', 'enter']
 
 
 async def test_footer_calls_it_remove(client):
