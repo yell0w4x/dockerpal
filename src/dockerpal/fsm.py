@@ -483,11 +483,11 @@ class ContainersScreen(ResourceScreen):
     ITEM_NAME = 'container'
     COLUMNS = ('Short ID', 'Name', 'Status', 'Image')
 
-    BINDINGS = ResourceScreen.BINDINGS + [
+    BINDINGS = [
         Binding("u", "start", "Start"),
         Binding("x", "stop", "Stop"),
         Binding("t", "restart", "Restart"),
-    ]
+    ] + ResourceScreen.BINDINGS
 
     def action_start(self):
         self.apply_to_selection(lambda key: self.get_item(key).start())
