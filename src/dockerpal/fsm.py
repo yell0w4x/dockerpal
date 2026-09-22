@@ -1,6 +1,6 @@
 import docker
 from textual.containers import Grid
-from textual.widgets import DataTable, Footer, Header, Label, Button, TextArea, ListView, ListItem
+from textual.widgets import DataTable, Footer, Header, Input, Label, Button, TextArea, ListView, ListItem
 from textual import events
 from textual.screen import Screen, ModalScreen
 from textual._context import active_app
@@ -181,6 +181,17 @@ class ScreenFSM:
         return active_app.get()
 
 
+class SearchInput(Input):
+    """Search box: Escape abandons the search, Enter keeps the filter."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def action_cancel(self):
+        self.screen.cancel_search()
+
+
 class ResourceScreen(Screen, ScreenStateBase):
     """Base for list screens: a DataTable with multi-row selection, a footer with
     totals, sidebar navigation and vi-like movement keys.
@@ -200,6 +211,7 @@ class ResourceScreen(Screen, ScreenStateBase):
         Binding("+", "select_all", "Select all"),
         Binding("-", "deselect_all", "Deselect all"),
         Binding("*", "invert_selection", "Invert selection"),
+        Binding("slash", "search", "Search"),
         Binding("s", "sidebar", "Sidebar"),
         Binding("q,escape", "exit", "Exit"),
         Binding("j", "down", "Down", show=False),
@@ -223,6 +235,12 @@ class ResourceScreen(Screen, ScreenStateBase):
         self.__selected_rows = set()
         self.__total_label = Label()
         self.__selected_label = Label()
+        self.__search = SearchInput(placeholder=f'Search {self.ITEM_NAME}s...', id='search')
+        self.__search.display = False
+        self.__search_prompt = Label('/', id='search-prompt')
+        self.__search_prompt.display = False
+        self.__query = ''
+        self.__query_before_search = ''
         self.renew()
 
     # --- to be provided by subclasses -------------------------------------
@@ -253,13 +271,22 @@ class ResourceScreen(Screen, ScreenStateBase):
 
     def renew(self):
         items = self.list_items()
+        rows = [(item, self.item_row(item)) for item in items]
+        shown = [(item, row) for item, row in rows if self.__matches(row)]
+
         table = self._table
         table.clear()
-        pad = self.__num_space_pad = len(str(len(items))) + len(self.SELECTED_SYMBOL) + 2
-        for i, item in enumerate(items, 1):
-            table.add_row(*self.item_row(item), key=self.item_key(item), label=f'{i: <{pad}}')
+        pad = self.__num_space_pad = len(str(len(shown))) + len(self.SELECTED_SYMBOL) + 2
+        for i, (item, row) in enumerate(shown, 1):
+            table.add_row(*row, key=self.item_key(item), label=f'{i: <{pad}}')
         self.__selected_rows.clear()
-        self.__update_footer(len(items))
+        self.__update_footer(len(shown), len(rows))
+
+    def __matches(self, row):
+        if not self.__query:
+            return True
+        query = self.__query.lower()
+        return any(query in str(cell).lower() for cell in row)
 
     def compose(self):
         yield from compose_sidebar(self.SCREEN_ID.removesuffix('-screen'))
@@ -268,6 +295,8 @@ class ResourceScreen(Screen, ScreenStateBase):
         with Horizontal(id="table-footer"):
             yield self.__total_label
             yield self.__selected_label
+            yield self.__search_prompt
+            yield self.__search
         yield Footer()
 
     def on_state_enter(self, data=None):
@@ -392,6 +421,38 @@ class ResourceScreen(Screen, ScreenStateBase):
     def action_sidebar(self):
         self.context().toggle_sidebar()
 
+    def action_search(self):
+        search = self.__search
+        self.__query_before_search = self.__query
+        search.display = True
+        self.__search_prompt.display = True
+        search.value = self.__query
+        search.focus()
+
+    def cancel_search(self):
+        """Close the search box, dropping the filter it was editing."""
+        if self.__query != self.__query_before_search:
+            self.__query = self.__query_before_search
+            self.renew()
+        self.__close_search()
+
+    def on_input_changed(self, event: Input.Changed):
+        if event.input is self.__search:
+            self.__query = event.value
+            self.renew()
+
+    def on_input_submitted(self, event: Input.Submitted):
+        if event.input is self.__search:
+            self.__close_search()
+
+    def is_searching(self):
+        return self.__search.display
+
+    def __close_search(self):
+        self.__search.display = False
+        self.__search_prompt.display = False
+        self.focus_main()
+
     def on_mount(self):
         self.focus_main()
 
@@ -405,8 +466,9 @@ class ResourceScreen(Screen, ScreenStateBase):
         elif table.row_count > 0:
             table.move_cursor(row=table.row_count - 1)
 
-    def __update_footer(self, total):
-        self.__total_label.update(f'Total: {total}')
+    def __update_footer(self, shown, total):
+        text = f'Total: {shown}/{total}' if self.__query else f'Total: {total}'
+        self.__total_label.update(text)
         self.__update_selected_label()
 
     def __update_selected_label(self):
@@ -576,6 +638,7 @@ class VolumesScreen(ResourceScreen):
 class DetailsScreen(Screen, ScreenStateBase):
     BINDINGS = [
         Binding("escape", "exit", "Go back"),
+        Binding("slash", "search", "Search"),
         Binding("s", "sidebar", "Sidebar"),
     ]
 

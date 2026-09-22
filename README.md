@@ -23,6 +23,7 @@ dockerpal
 | `Enter` | Show the JSON details of the row under the cursor |
 | `d` / `Delete` | Delete the selected rows (or the cursor row) after confirmation |
 | `u` / `x` / `t` | Containers only: start / stop / restart the selected rows (or the cursor row) |
+| `/` | Search: filter the list as you type; `Enter` keeps the filter, `Esc` drops it |
 | `r` | Refresh the list |
 | `Esc` | Close the sidebar / go back / quit |
 | `q` | Quit |

@@ -1,4 +1,5 @@
 from textual.app import App
+from textual.widgets import Input
 from textual.theme import Theme
 from textual import events
 from textual._context import active_app
@@ -58,6 +59,20 @@ class DockerPalApp(App):
         # background: dodgerblue;
     }
 
+    #search-prompt {
+        margin-right: 0;
+        display: none;
+    }
+
+    #search {
+        width: 1fr;
+        height: 1;
+        border: none;
+        padding: 0;
+        background: $panel;
+        display: none;
+    }
+
     #initializing-label,#error-label {
         column-span: 2;
         height: 1fr;
@@ -102,6 +117,10 @@ class DockerPalApp(App):
     def on_key(self, event: events.Key):
         if self.__fsm is None or self.screen is not self.__fsm.state():
             # A modal (e.g. confirm dialog) is on top: it handles its own keys.
+            return
+
+        if isinstance(self.focused, Input):
+            # Typing in the search box: keys are text, not commands.
             return
 
         match event.key:
