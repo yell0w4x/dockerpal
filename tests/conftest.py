@@ -1,6 +1,6 @@
 import pytest
 
-from tests.fakes import FakeClient, FakeImage
+from tests.fakes import FakeClient, FakeContainer, FakeImage
 
 
 @pytest.fixture
@@ -13,5 +13,13 @@ def images():
 
 
 @pytest.fixture
-def client(images):
-    return FakeClient(images=images)
+def containers(images):
+    return [
+        FakeContainer('1' * 64, 'web', images[0], status='running'),
+        FakeContainer('2' * 64, 'db', images[1], status='exited'),
+    ]
+
+
+@pytest.fixture
+def client(images, containers):
+    return FakeClient(images=images, containers=containers)

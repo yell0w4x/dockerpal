@@ -62,7 +62,7 @@ class ScreenFSM:
 
 
     def set_containers_screen(self):
-        self.notify('Not implemented yet.', severity='warning')
+        self.set_state(ContainersScreen(self, self.__docker_cli))
 
 
     def set_networks_screen(self):
@@ -435,6 +435,33 @@ class ImagesScreen(ResourceScreen):
 
     def open_details(self, image):
         self.context().set_image_details_screen(image)
+
+
+class ContainersScreen(ResourceScreen):
+    SCREEN_ID = 'containers-screen'
+    TITLE = 'Containers'
+    COLUMNS = ('Short ID', 'Name', 'Image', 'Status')
+
+    def list_items(self):
+        return self._cli.containers.list(all=True)
+
+    def item_key(self, container):
+        return container.id
+
+    def item_row(self, container):
+        image = container.image
+        image_name = image.tags[0] if image is not None and image.tags else (
+            image.short_id.split(':')[-1] if image is not None else '<None>')
+        return container.short_id, container.name, image_name, container.status
+
+    def get_item(self, key):
+        return self._cli.containers.get(key)
+
+    def remove_item(self, key):
+        self._cli.containers.get(key).remove()
+
+    def open_details(self, container):
+        self.context().notify('Not implemented yet.', severity='warning')
 
 
 class ImageDetailsScreen(Screen, ScreenStateBase):
