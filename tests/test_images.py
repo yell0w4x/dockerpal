@@ -87,9 +87,9 @@ async def test_enter_opens_image_details_and_escape_returns(client):
         await pilot.press('j')
         await pilot.press('enter')
         await pilot.pause()
-        assert app.screen.id == 'image-details-screen'
+        assert app.screen.id == 'details-screen'
         assert app.sub_title == 'Image details'
-        details = app.screen.query_one('#image-details', TextArea)
+        details = app.screen.query_one('#details', TextArea)
         assert 'ubuntu:22.04' in details.text
         await pilot.press('escape')
         await pilot.pause()

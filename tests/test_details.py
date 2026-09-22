@@ -35,6 +35,6 @@ async def test_sidebar_works_from_details_screen(client):
         await pilot.pause()
         await pilot.press('enter')
         await pilot.pause()
-        assert app.screen.id == 'image-details-screen'
+        assert app.screen.id == 'details-screen'
         await goto_containers(pilot)
         assert app.screen.id == 'containers-screen'

@@ -89,10 +89,6 @@ class ScreenFSM:
         getattr(self, self.SIDEBAR_ITEMS[item.id])()
 
 
-    def set_image_details_screen(self, image):
-        self.set_state(ImageDetailsScreen(self, image))
-
-
     def set_details_screen(self, item, title, back):
         """Show ``item.attrs`` as JSON; ``back`` is the FSM method name to
         call on Escape."""
@@ -440,7 +436,7 @@ class ImagesScreen(ResourceScreen):
         self._cli.images.remove(key)
 
     def open_details(self, image):
-        self.context().set_image_details_screen(image)
+        self.context().set_details_screen(image, 'Image details', 'set_images_screen')
 
 
 class ContainersScreen(ResourceScreen):
@@ -578,56 +574,6 @@ class DetailsScreen(Screen, ScreenStateBase):
                     context.activate_sidebar_item()
             case 'escape':
                 getattr(context, self.__back)()
-
-
-class ImageDetailsScreen(Screen, ScreenStateBase):
-    BINDINGS = [
-        Binding("escape", "exit", "Go back"),
-    ]
-
-    def __init__(self, ctx, image):
-        Screen.__init__(self, id='image-details-screen')
-        ScreenStateBase.__init__(self, ctx)
-        self.__image = image
-
-
-    def on_mount(self):
-        self.get_child_by_id('image-details').focus()
-
-
-    def on_state_enter(self, data=None):
-        if data is not None:
-            self.__image = data
-
-        self.context().set_subtitle('Image details')
-        self.context().switch_screen(self)
-
-
-    def compose(self):
-        try:        
-            yield from compose_sidebar()
-            yield Header()
-            yield Footer()
-            details = json.dumps(self.__image.attrs, indent=4)
-            yield TextArea(details, read_only=True, language='json', id='image-details')
-        except json.JSONDecodeError as e:
-            yield TextArea(f'Unable to parse image details: {e}', read_only=True, language='html', id='image-details')
-            self.context().notify(f'Unable to parse image details: {e}', severity='error')
-        except Exception as e:
-            yield TextArea(f'Unable to parse image details: {e}', read_only=True, language='html', id='image-details')
-            self.context().notify(str(e), severity='error')
-
-
-    def on_state_key(self, event: events.Key):
-        context = self.context()
-        match event.key:
-            case 'enter':
-                if context.is_sidebar_visible():
-                    context.activate_sidebar_item()
-            case 'escape':
-                context.set_images_screen()
-            case 's':
-                context.toggle_sidebar()
 
 
 class SplashScreen(Screen):
