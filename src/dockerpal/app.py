@@ -66,9 +66,10 @@ class DockerPalApp(App):
     }    
     """
 
-    def __init__(self):
+    def __init__(self, docker_cli=None):
         super().__init__()
         self.__fsm = None
+        self.__docker_cli = docker_cli
         active_app.set(self)
 
 
@@ -89,7 +90,7 @@ class DockerPalApp(App):
         self.theme = 'arctic'
 
         try:
-            cli = docker.from_env()
+            cli = self.__docker_cli if self.__docker_cli is not None else docker.from_env()
         except Exception as e:
             self.push_screen(ErrorScreen(f"Error connecting to Docker: {e}"))
             return
