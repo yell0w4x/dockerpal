@@ -141,7 +141,9 @@ async def test_images_menu(client):
     async with app.run_test() as pilot:
         await pilot.pause()
         await open_menu(pilot)
-        assert menu_labels(app) == ['Remove', 'Force remove', 'Details']
+        assert menu_labels(app) == [
+            'Remove', 'Force remove', 'Export JSON', 'Export Dockerfile', 'Details',
+        ]
         assert menu_title(app) == 'Actions: 1 image'
         await choose(pilot, 0)
         assert 'Remove 1 image?' in str(app.screen.query_one('#question', Label).content)

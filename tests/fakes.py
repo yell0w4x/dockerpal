@@ -4,11 +4,18 @@ import docker.errors
 
 
 class FakeImage:
-    def __init__(self, image_id, tags=None, attrs=None):
+    def __init__(self, image_id, tags=None, attrs=None, history=None):
         self.id = f'sha256:{image_id}'
         self.short_id = f'sha256:{image_id[:12]}'
         self.tags = tags or []
         self.attrs = attrs or {'Id': self.id, 'RepoTags': self.tags}
+        self._history = history if history is not None else [
+            {'CreatedBy': '/bin/sh -c #(nop)  CMD ["/bin/sh"]'},
+            {'CreatedBy': '/bin/sh -c #(nop) ADD file:deadbeef in /'},
+        ]
+
+    def history(self):
+        return self._history
 
 
 class FakeImages:

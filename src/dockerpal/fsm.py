@@ -12,11 +12,8 @@ from rich.text import Text
 from rich.style import Style
 
 import json
-import re
 
-from pathlib import Path
-
-from dockerpal import clipboard
+from dockerpal import clipboard, dockerfile, export
 
 
 SIDEBAR_ITEMS = ('images', 'containers', 'networks', 'volumes')
@@ -282,6 +279,10 @@ class ResourceScreen(Screen, ScreenStateBase):
     def open_details(self, item):
         raise NotImplementedError
 
+    def item_name(self, item):
+        """Human readable name, used for details titles and export filenames."""
+        raise NotImplementedError
+
     # ---------------------------------------------------------------------
 
     @classmethod
@@ -457,6 +458,23 @@ class ResourceScreen(Screen, ScreenStateBase):
             self.renew()
             self.__set_cursor_row(cursor_row)
 
+    def export_selection(self, suffix, render):
+        """Write ``render(item)`` for each selected item into the current directory."""
+        paths = []
+        try:
+            for key in self.__selection_keys():
+                item = self.get_item(key)
+                paths.append(export.write(render(item), self.item_name(item), suffix))
+        except docker.errors.APIError as e:
+            self.context().notify(e.explanation or str(e), severity='error')
+        except OSError as e:
+            self.context().notify(f'Unable to export: {e}', severity='error')
+        else:
+            if len(paths) == 1:
+                self.context().notify(f'Exported to {paths[0]}')
+            elif paths:
+                self.context().notify(f'Exported {len(paths)} files to {paths[0].parent}')
+
     def action_refresh(self):
         self.renew()
 
@@ -599,6 +617,8 @@ class ImagesScreen(ResourceScreen):
     ACTIONS = (
         ('Remove', 'delete', 'd'),
         ('Force remove', 'force_delete', ''),
+        ('Export JSON', 'export_json', ''),
+        ('Export Dockerfile', 'export_dockerfile', ''),
         ('Details', 'details', 'enter'),
     )
 
@@ -619,9 +639,20 @@ class ImagesScreen(ResourceScreen):
     def remove_item(self, key, force=False):
         self._cli.images.remove(key, force=force)
 
+    def item_name(self, image):
+        return image.tags[0] if image.tags else image.short_id.split(':')[-1]
+
     def open_details(self, image):
-        name = image.tags[0] if image.tags else image.short_id.split(':')[-1]
-        self.context().set_details_screen(image, 'Image details', 'set_images_screen', name)
+        self.context().set_details_screen(
+            image, 'Image details', 'set_images_screen', self.item_name(image))
+
+    def action_export_json(self):
+        self.export_selection('.json', lambda image: json.dumps(image.attrs, indent=4))
+
+    def action_export_dockerfile(self):
+        """Write an approximate Dockerfile rebuilt from each image's history."""
+        self.export_selection('.Dockerfile', lambda image: dockerfile.from_history(
+            image.history(), image_ref=self.item_name(image)))
 
 
 class ContainersScreen(ResourceScreen):
@@ -701,9 +732,12 @@ class ContainersScreen(ResourceScreen):
     def remove_item(self, key, force=False):
         self._cli.containers.get(key).remove(force=force)
 
+    def item_name(self, container):
+        return container.name
+
     def open_details(self, container):
         self.context().set_details_screen(
-            container, 'Container details', 'set_containers_screen', container.name)
+            container, 'Container details', 'set_containers_screen', self.item_name(container))
 
 
 class NetworksScreen(ResourceScreen):
@@ -733,9 +767,12 @@ class NetworksScreen(ResourceScreen):
         # The docker API has no force flag for networks.
         self._cli.networks.get(key).remove()
 
+    def item_name(self, network):
+        return network.name
+
     def open_details(self, network):
         self.context().set_details_screen(
-            network, 'Network details', 'set_networks_screen', network.name)
+            network, 'Network details', 'set_networks_screen', self.item_name(network))
 
 
 class VolumesScreen(ResourceScreen):
@@ -765,9 +802,12 @@ class VolumesScreen(ResourceScreen):
     def remove_item(self, key, force=False):
         self._cli.volumes.get(key).remove(force=force)
 
+    def item_name(self, volume):
+        return volume.name
+
     def open_details(self, volume):
         self.context().set_details_screen(
-            volume, 'Volume details', 'set_volumes_screen', volume.name)
+            volume, 'Volume details', 'set_volumes_screen', self.item_name(volume))
 
 
 class DetailsScreen(Screen, ScreenStateBase):
@@ -814,23 +854,12 @@ class DetailsScreen(Screen, ScreenStateBase):
 
     def action_export(self):
         details = self.get_child_by_id('details')
-        path = self.__export_path()
         try:
-            path.write_text(details.text)
+            path = export.write(details.text, self.__name, '.json')
         except OSError as e:
             self.context().notify(f'Unable to export: {e}', severity='error')
         else:
             self.context().notify(f'Exported to {path}')
-
-    def __export_path(self):
-        """A free path in the current directory, so an export never clobbers."""
-        stem = re.sub(r'[^A-Za-z0-9._-]', '_', self.__name) or 'details'
-        path = Path(f'{stem}.json').resolve()
-        i = 0
-        while path.exists():
-            i += 1
-            path = Path(f'{stem}-{i}.json').resolve()
-        return path
 
     def on_mount(self):
         self.focus_main()

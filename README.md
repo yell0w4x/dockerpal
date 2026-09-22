@@ -24,6 +24,7 @@ dockerpal
 | `Enter` | Show the JSON details of the row under the cursor |
 | `d` / `Delete` | Remove the selected rows (or the cursor row) after confirmation |
 | `u` / `x` / `t` | Containers only: start / stop / restart the selected rows (or the cursor row) |
+| `c` | Containers only: commit the container under the cursor as a new image |
 | `/` | Search: filter the list as you type. `Enter` keeps the filter (shown as `/query` in the footer), `Esc` abandons it |
 | `r` | Refresh the list |
 | `y` | Details view: copy the selection to the clipboard (the whole document when nothing is selected) |
@@ -39,10 +40,22 @@ cursor row when nothing is selected):
 
 | Screen | Actions |
 | --- | --- |
-| Images | Remove, Force remove, Details |
-| Containers | Start, Stop, Restart, Remove, Force remove, Details |
+| Images | Remove, Force remove, Export JSON, Export Dockerfile, Details |
+| Containers | Start, Stop, Restart, Commit as image, Remove, Force remove, Details |
 | Networks | Remove, Details |
 | Volumes | Remove, Force remove, Details |
+
+### Exporting
+
+`Export JSON` writes an image's metadata, and `Export Dockerfile` an
+approximate Dockerfile rebuilt from its history, into the current directory
+(`alpine_latest.json`, `alpine_latest.Dockerfile`). Both work over the whole
+selection, and neither overwrites: an existing file gets a `-1`, `-2` sibling.
+
+Docker does not store the Dockerfile an image was built from, so the
+reconstruction comes from the recorded layer commands. `ADD`/`COPY` contents
+are not in the image, and BuildKit records less than the classic builder, so
+treat the result as documentation rather than something to rebuild from.
 
 ### Clipboard
 
