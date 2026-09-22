@@ -1,20 +1,19 @@
-
+from dockerpal import __version__
 from dockerpal.app import app
 
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from argparse import ArgumentParser
 import sys
 
 
-def cli(args=sys.argv[1:]):
-    parser = ArgumentParser(description='dockerpal description goes here')
-    parser.add_argument('--change-me', default='An option sample', required=False, 
-        help='Just an option sample of your cli to be substituted by real ones')
+def cli(args=None):
+    parser = ArgumentParser(prog='dockerpal', description='TUI based docker explorer')
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
 
-    return parser.parse_args(args)
+    return parser.parse_args(sys.argv[1:] if args is None else args)
 
 
 def main():
-    args = cli()
+    cli()
     app()
 
 
