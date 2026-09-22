@@ -6,7 +6,7 @@ import sys
 
 
 def cli(args=None):
-    parser = ArgumentParser(prog='dockerpal', description='TUI based docker explorer')
+    parser = ArgumentParser(prog='dockerpal', description='Terminal UI for exploring and cleaning up Docker images, containers, networks and volumes')
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
 
     return parser.parse_args(sys.argv[1:] if args is None else args)
