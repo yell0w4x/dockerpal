@@ -46,6 +46,8 @@ async def test_delete_volume(client, volumes):
         await pilot.press('j')
         await pilot.press('d')
         await pilot.pause()
+        await pilot.press('y')
+        await pilot.pause()
         assert volumes[1].calls == ['remove']
         assert volumes_table(app).row_count == 1
 
@@ -56,6 +58,8 @@ async def test_delete_volume_in_use_reports_error(client, volumes):
         await pilot.pause()
         await goto_volumes(pilot)
         await pilot.press('d')
+        await pilot.pause()
+        await pilot.press('y')
         await pilot.pause()
         assert volumes_table(app).row_count == 2
         assert any('is in use' in n.message for n in app._notifications)

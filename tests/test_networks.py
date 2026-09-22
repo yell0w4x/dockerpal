@@ -45,6 +45,8 @@ async def test_delete_network(client, networks):
         await pilot.press('j')
         await pilot.press('d')
         await pilot.pause()
+        await pilot.press('y')
+        await pilot.pause()
         assert networks[1].calls == ['remove']
         assert networks_table(app).row_count == 1
 
@@ -55,6 +57,8 @@ async def test_delete_predefined_network_reports_error(client, networks):
         await pilot.pause()
         await goto_networks(pilot)
         await pilot.press('d')
+        await pilot.pause()
+        await pilot.press('y')
         await pilot.pause()
         assert networks_table(app).row_count == 2
         assert any('pre-defined network' in n.message for n in app._notifications)

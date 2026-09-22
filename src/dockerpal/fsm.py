@@ -189,6 +189,7 @@ class ResourceScreen(Screen, ScreenStateBase):
 
     SCREEN_ID = None
     TITLE = None
+    ITEM_NAME = 'item'
     COLUMNS = ()
     SELECTED_SYMBOL = '[✓]'
 
@@ -353,7 +354,18 @@ class ResourceScreen(Screen, ScreenStateBase):
         self._table.action_scroll_bottom()
 
     def action_delete(self):
-        self.apply_to_selection(self.remove_item)
+        count = self.__selection_size()
+        if count == 0:
+            return
+        noun = self.ITEM_NAME if count == 1 else f'{self.ITEM_NAME}s'
+        question = f'Delete {count} {noun}?'
+
+        def on_answer(confirmed):
+            if confirmed:
+                self.apply_to_selection(self.remove_item)
+            self.focus_main()
+
+        self.app.push_screen(ConfirmScreen(question), on_answer)
 
     def apply_to_selection(self, func):
         """Run ``func(key)`` on the selected rows, or on the cursor row when
@@ -424,6 +436,11 @@ class ResourceScreen(Screen, ScreenStateBase):
         if move_cursor:
             table.action_cursor_down()
 
+    def __selection_size(self):
+        if self._table.row_count == 0:
+            return 0
+        return len(self.__selected_rows) or 1
+
     def __get_row_key(self, row_index):
         rows = tuple(self._table.rows.items())
         row_key, _ = rows[row_index]
@@ -436,6 +453,7 @@ class ResourceScreen(Screen, ScreenStateBase):
 class ImagesScreen(ResourceScreen):
     SCREEN_ID = 'images-screen'
     TITLE = 'Images'
+    ITEM_NAME = 'image'
     COLUMNS = ('Short ID', 'Tags')
 
     def list_items(self):
@@ -462,6 +480,7 @@ class ImagesScreen(ResourceScreen):
 class ContainersScreen(ResourceScreen):
     SCREEN_ID = 'containers-screen'
     TITLE = 'Containers'
+    ITEM_NAME = 'container'
     COLUMNS = ('Short ID', 'Name', 'Image', 'Status')
 
     BINDINGS = ResourceScreen.BINDINGS + [
@@ -505,6 +524,7 @@ class ContainersScreen(ResourceScreen):
 class NetworksScreen(ResourceScreen):
     SCREEN_ID = 'networks-screen'
     TITLE = 'Networks'
+    ITEM_NAME = 'network'
     COLUMNS = ('Short ID', 'Name', 'Driver', 'Scope')
 
     def list_items(self):
@@ -530,6 +550,7 @@ class NetworksScreen(ResourceScreen):
 class VolumesScreen(ResourceScreen):
     SCREEN_ID = 'volumes-screen'
     TITLE = 'Volumes'
+    ITEM_NAME = 'volume'
     COLUMNS = ('Name', 'Driver', 'Mountpoint')
 
     def list_items(self):
@@ -608,11 +629,6 @@ class SplashScreen(Screen):
         yield Grid(Label("Initializing...", id='initializing-label'), id="splash-screen")
 
 
-class NotImplementedScreen(Screen):
-    def compose(self):
-        yield Grid(Label("Not Implemented", id='not-implemented-label'), id="not-implemented-screen")
-
-
 class ErrorScreen(Screen):
     BINDINGS = [
         Binding("q,escape", "exit", "Exit"),
@@ -629,19 +645,34 @@ class ErrorScreen(Screen):
         yield Grid(Label(self.__message, id='error-label'), id="error-screen")
 
 
-class QuitScreen(ModalScreen):
-    """Screen with a dialog to quit."""
+class ConfirmScreen(ModalScreen[bool]):
+    """Yes/no dialog; dismisses with True on y/Enter/Yes, False on n/Escape/No."""
+
+    BINDINGS = [
+        Binding("y,enter", "yes", "Yes"),
+        Binding("n,escape", "no", "No"),
+    ]
+
+    def __init__(self, question):
+        super().__init__(id='confirm-screen')
+        self.__question = question
 
     def compose(self):
         yield Grid(
-            Label("Are you sure you want to quit?", id="question"),
-            Button("Quit", variant="error", id="quit"),
-            Button("Cancel", variant="primary", id="cancel"),
+            Label(self.__question, id="question"),
+            Button("Yes", variant="error", id="yes"),
+            Button("No", variant="primary", id="no"),
             id="dialog",
         )
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "quit":
-            self.app.exit()
-        else:
-            self.app.pop_screen()
+    def on_mount(self):
+        self.query_one('#no', Button).focus()
+
+    def action_yes(self):
+        self.dismiss(True)
+
+    def action_no(self):
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed):
+        self.dismiss(event.button.id == 'yes')

@@ -80,6 +80,8 @@ async def test_delete_stopped_container(client, containers):
         await pilot.press('j')
         await pilot.press('d')
         await pilot.pause()
+        await pilot.press('y')
+        await pilot.pause()
         assert containers[1].calls == ['remove']
         assert containers_table(app).row_count == 1
 
@@ -90,6 +92,8 @@ async def test_delete_running_container_reports_error(client, containers):
         await pilot.pause()
         await goto_containers(pilot)
         await pilot.press('d')
+        await pilot.pause()
+        await pilot.press('y')
         await pilot.pause()
         assert containers[0].calls == []
         assert containers_table(app).row_count == 2

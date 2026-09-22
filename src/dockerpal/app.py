@@ -58,12 +58,38 @@ class DockerPalApp(App):
         # background: dodgerblue;
     }
 
-    #initializing-label,#not-implemented-label,#error-label {
+    #initializing-label,#error-label {
         column-span: 2;
         height: 1fr;
         width: 1fr;
         content-align: center middle;
-    }    
+    }
+
+    ConfirmScreen {
+        align: center middle;
+    }
+
+    #dialog {
+        grid-size: 2;
+        grid-gutter: 1 2;
+        grid-rows: 1fr 3;
+        padding: 0 1;
+        width: 60;
+        height: 11;
+        border: thick $primary 80%;
+        background: $surface;
+    }
+
+    #question {
+        column-span: 2;
+        height: 1fr;
+        width: 1fr;
+        content-align: center middle;
+    }
+
+    #dialog Button {
+        width: 100%;
+    }
     """
 
     def __init__(self, docker_cli=None):
@@ -74,12 +100,13 @@ class DockerPalApp(App):
 
 
     def on_key(self, event: events.Key):
+        if self.__fsm is None or self.screen is not self.__fsm.state():
+            # A modal (e.g. confirm dialog) is on top: it handles its own keys.
+            return
+
         match event.key:
             case 'q':
                 self.exit()
-
-        if self.__fsm is None:
-            return
 
         self.__fsm.on_state_key(event)
 

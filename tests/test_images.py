@@ -49,6 +49,8 @@ async def test_delete_removes_image_under_cursor(client):
         await pilot.press('j')
         await pilot.press('d')
         await pilot.pause()
+        await pilot.press('y')
+        await pilot.pause()
         assert client.images.removed == ['sha256:' + 'b' * 64]
         assert images_table(app).row_count == 2
         assert footer_text(app, 0) == 'Total: 2'
@@ -61,6 +63,8 @@ async def test_delete_removes_selected_images(client):
         await pilot.press('space')
         await pilot.press('space')
         await pilot.press('d')
+        await pilot.pause()
+        await pilot.press('y')
         await pilot.pause()
         assert sorted(client.images.removed) == ['sha256:' + 'a' * 64, 'sha256:' + 'b' * 64]
         assert images_table(app).row_count == 1
