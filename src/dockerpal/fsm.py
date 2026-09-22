@@ -16,6 +16,8 @@ import re
 
 from pathlib import Path
 
+from dockerpal import clipboard
+
 
 SIDEBAR_ITEMS = ('images', 'containers', 'networks', 'volumes')
 
@@ -751,9 +753,20 @@ class DetailsScreen(Screen, ScreenStateBase):
         """Copy the selection, or the whole document when nothing is selected."""
         details = self.get_child_by_id('details')
         text = details.selected_text or details.text
-        self.app.copy_to_clipboard(text)
         lines = len(text.splitlines())
-        self.context().notify(f'Copied {lines} line{"" if lines == 1 else "s"} to the clipboard')
+        plural = '' if lines == 1 else 's'
+
+        tool = clipboard.copy(text)
+        # Also emit OSC 52: that is what reaches the clipboard over ssh or tmux.
+        self.app.copy_to_clipboard(text)
+
+        if tool is None:
+            self.context().notify(
+                f'Copied {lines} line{plural} via terminal escape sequence only. '
+                'Install xclip, xsel or wl-clipboard for reliable copying.',
+                severity='warning')
+        else:
+            self.context().notify(f'Copied {lines} line{plural} to the clipboard ({tool})')
 
     def action_export(self):
         details = self.get_child_by_id('details')

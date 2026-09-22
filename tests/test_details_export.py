@@ -21,7 +21,7 @@ async def open_image_details(pilot):
     await pilot.pause()
 
 
-async def test_y_copies_the_selected_text(client):
+async def test_y_copies_the_selected_text(client, no_system_clipboard):
     app = DockerPalApp(docker_cli=client)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -30,17 +30,19 @@ async def test_y_copies_the_selected_text(client):
         await pilot.pause()
         await pilot.press('y')
         await pilot.pause()
+        assert no_system_clipboard == ['{\n']
         assert app.clipboard == '{\n'
         assert any('Copied' in m for m in notifications(app))
 
 
-async def test_y_without_a_selection_copies_everything(client):
+async def test_y_without_a_selection_copies_everything(client, no_system_clipboard):
     app = DockerPalApp(docker_cli=client)
     async with app.run_test() as pilot:
         await pilot.pause()
         await open_image_details(pilot)
         await pilot.press('y')
         await pilot.pause()
+        assert no_system_clipboard == [details(app).text]
         assert app.clipboard == details(app).text
         assert json.loads(app.clipboard)['RepoTags'] == ['alpine:latest']
 
@@ -114,3 +116,34 @@ async def test_details_footer_advertises_copy_and_export(client):
             ('y', 'Copy'),
             ('e', 'Export JSON'),
         }
+
+
+async def test_copy_goes_to_the_system_clipboard(client, monkeypatch):
+    from dockerpal import clipboard
+
+    copied = []
+    monkeypatch.setattr(clipboard, 'copy', lambda text: copied.append(text) or 'xclip')
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await open_image_details(pilot)
+        await pilot.press('y')
+        await pilot.pause()
+        assert copied == [details(app).text]
+        assert app.clipboard == details(app).text     # OSC 52 as well, for ssh/tmux
+        assert any('clipboard' in m for m in notifications(app))
+
+
+async def test_copy_warns_when_no_clipboard_tool_is_installed(client, monkeypatch):
+    from dockerpal import clipboard
+
+    monkeypatch.setattr(clipboard, 'copy', lambda text: None)
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await open_image_details(pilot)
+        await pilot.press('y')
+        await pilot.pause()
+        assert app.clipboard == details(app).text
+        warnings = [n for n in app._notifications if n.severity == 'warning']
+        assert warnings and 'xclip' in warnings[0].message

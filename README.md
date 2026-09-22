@@ -27,6 +27,7 @@ dockerpal
 | `/` | Search: filter the list as you type. `Enter` keeps the filter (shown as `/query` in the footer), `Esc` abandons it |
 | `r` | Refresh the list |
 | `y` | Details view: copy the selection to the clipboard (the whole document when nothing is selected) |
+
 | `e` | Details view: export the JSON to a file in the current directory |
 | `Esc` | Close the sidebar, else clear an active filter, else go back / quit |
 | `q` | Quit |
@@ -42,6 +43,14 @@ cursor row when nothing is selected):
 | Containers | Start, Stop, Restart, Remove, Force remove, Details |
 | Networks | Remove, Details |
 | Volumes | Remove, Force remove, Details |
+
+### Clipboard
+
+Copying uses the platform's clipboard helper — `wl-copy` (Wayland), `xclip` or
+`xsel` (X11), `pbcopy` (macOS), `clip.exe` (WSL) — and also emits an OSC 52
+escape sequence, which is what reaches the clipboard over ssh or inside tmux.
+If none of those tools is installed, only the escape sequence is sent and the
+app says so; install one of them for reliable copying.
 
 ## Development
 
