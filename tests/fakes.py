@@ -40,6 +40,7 @@ class FakeContainer:
         self.status = status
         self.attrs = attrs or {'Id': self.id, 'Name': f'/{name}', 'State': {'Status': status}}
         self.calls = []
+        self.collection = None
 
     def start(self):
         self.calls.append('start')
@@ -58,11 +59,15 @@ class FakeContainer:
             raise docker.errors.APIError(
                 'conflict', explanation=f'cannot remove running container {self.short_id}')
         self.calls.append('remove')
+        if self.collection is not None:
+            self.collection._containers.pop(self.id, None)
 
 
 class FakeContainers:
     def __init__(self, containers):
         self._containers = {c.id: c for c in containers}
+        for c in containers:
+            c.collection = self
 
     def list(self, all=False, **kwargs):
         return [c for c in self._containers.values() if all or c.status == 'running']
@@ -74,9 +79,7 @@ class FakeContainers:
         raise docker.errors.NotFound(f'No such container: {container_id}')
 
     def remove(self, container_id, **kwargs):
-        c = self.get(container_id)
-        c.remove(**kwargs)
-        del self._containers[c.id]
+        self.get(container_id).remove(**kwargs)
 
 
 class FakeClient:

@@ -442,6 +442,21 @@ class ContainersScreen(ResourceScreen):
     TITLE = 'Containers'
     COLUMNS = ('Short ID', 'Name', 'Image', 'Status')
 
+    BINDINGS = ResourceScreen.BINDINGS + [
+        Binding("u", "start", "Start"),
+        Binding("x", "stop", "Stop"),
+        Binding("t", "restart", "Restart"),
+    ]
+
+    def action_start(self):
+        self.apply_to_selection(lambda key: self.get_item(key).start())
+
+    def action_stop(self):
+        self.apply_to_selection(lambda key: self.get_item(key).stop())
+
+    def action_restart(self):
+        self.apply_to_selection(lambda key: self.get_item(key).restart())
+
     def list_items(self):
         return self._cli.containers.list(all=True)
 
