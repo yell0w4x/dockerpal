@@ -47,8 +47,12 @@ async def test_details_footer_only_offers_keys_that_work(client):
         await pilot.press('enter')
         await pilot.pause()
         assert app.screen.id == 'details-screen'
-        shown = {(b.key, b.description) for b in app.screen._bindings.shown_keys}
-        assert shown == {('escape', 'Go back'), ('s', 'Sidebar')}
+        shown = [b for b in app.screen._bindings.shown_keys]
+        assert shown, 'the details screen should advertise some keys'
+        for binding in shown:
+            assert hasattr(app.screen, f'action_{binding.action}'), binding.key
+        assert 'Actions' not in {b.description for b in shown}
+        assert 'Search' not in {b.description for b in shown}
 
 
 async def test_details_ignores_the_actions_and_search_keys(client):

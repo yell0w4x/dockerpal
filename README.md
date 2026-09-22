@@ -26,6 +26,8 @@ dockerpal
 | `u` / `x` / `t` | Containers only: start / stop / restart the selected rows (or the cursor row) |
 | `/` | Search: filter the list as you type. `Enter` keeps the filter (shown as `/query` in the footer), `Esc` abandons it |
 | `r` | Refresh the list |
+| `y` | Details view: copy the selection to the clipboard (the whole document when nothing is selected) |
+| `e` | Details view: export the JSON to a file in the current directory |
 | `Esc` | Close the sidebar, else clear an active filter, else go back / quit |
 | `q` | Quit |
 

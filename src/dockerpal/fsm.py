@@ -12,6 +12,9 @@ from rich.text import Text
 from rich.style import Style
 
 import json
+import re
+
+from pathlib import Path
 
 
 SIDEBAR_ITEMS = ('images', 'containers', 'networks', 'volumes')
@@ -98,10 +101,10 @@ class ScreenFSM:
         getattr(self, self.SIDEBAR_ITEMS[item.id])()
 
 
-    def set_details_screen(self, item, title, back):
+    def set_details_screen(self, item, title, back, name):
         """Show ``item.attrs`` as JSON; ``back`` is the FSM method name to
-        call on Escape."""
-        self.set_state(DetailsScreen(self, item, title, back))
+        call on Escape, ``name`` the basename used when exporting."""
+        self.set_state(DetailsScreen(self, item, title, back, name))
 
 
     def set_state(self, state, data=None):
@@ -600,7 +603,8 @@ class ImagesScreen(ResourceScreen):
         self._cli.images.remove(key, force=force)
 
     def open_details(self, image):
-        self.context().set_details_screen(image, 'Image details', 'set_images_screen')
+        name = image.tags[0] if image.tags else image.short_id.split(':')[-1]
+        self.context().set_details_screen(image, 'Image details', 'set_images_screen', name)
 
 
 class ContainersScreen(ResourceScreen):
@@ -652,7 +656,8 @@ class ContainersScreen(ResourceScreen):
         self._cli.containers.get(key).remove(force=force)
 
     def open_details(self, container):
-        self.context().set_details_screen(container, 'Container details', 'set_containers_screen')
+        self.context().set_details_screen(
+            container, 'Container details', 'set_containers_screen', container.name)
 
 
 class NetworksScreen(ResourceScreen):
@@ -683,7 +688,8 @@ class NetworksScreen(ResourceScreen):
         self._cli.networks.get(key).remove()
 
     def open_details(self, network):
-        self.context().set_details_screen(network, 'Network details', 'set_networks_screen')
+        self.context().set_details_screen(
+            network, 'Network details', 'set_networks_screen', network.name)
 
 
 class VolumesScreen(ResourceScreen):
@@ -714,21 +720,60 @@ class VolumesScreen(ResourceScreen):
         self._cli.volumes.get(key).remove(force=force)
 
     def open_details(self, volume):
-        self.context().set_details_screen(volume, 'Volume details', 'set_volumes_screen')
+        self.context().set_details_screen(
+            volume, 'Volume details', 'set_volumes_screen', volume.name)
 
 
 class DetailsScreen(Screen, ScreenStateBase):
     BINDINGS = [
         Binding("escape", "exit", "Go back"),
+        Binding("y", "copy", "Copy"),
+        Binding("e", "export", "Export JSON"),
         Binding("s", "sidebar", "Sidebar"),
     ]
 
-    def __init__(self, ctx, item, title, back):
+    def __init__(self, ctx, item, title, back, name):
         Screen.__init__(self, id='details-screen')
         ScreenStateBase.__init__(self, ctx)
         self.__item = item
         self.__title = title
         self.__back = back
+        self.__name = name
+
+    def action_exit(self):
+        context = self.context()
+        if context.is_sidebar_visible():
+            context.hide_sidebar()
+        else:
+            getattr(context, self.__back)()
+
+    def action_copy(self):
+        """Copy the selection, or the whole document when nothing is selected."""
+        details = self.get_child_by_id('details')
+        text = details.selected_text or details.text
+        self.app.copy_to_clipboard(text)
+        lines = len(text.splitlines())
+        self.context().notify(f'Copied {lines} line{"" if lines == 1 else "s"} to the clipboard')
+
+    def action_export(self):
+        details = self.get_child_by_id('details')
+        path = self.__export_path()
+        try:
+            path.write_text(details.text)
+        except OSError as e:
+            self.context().notify(f'Unable to export: {e}', severity='error')
+        else:
+            self.context().notify(f'Exported to {path}')
+
+    def __export_path(self):
+        """A free path in the current directory, so an export never clobbers."""
+        stem = re.sub(r'[^A-Za-z0-9._-]', '_', self.__name) or 'details'
+        path = Path(f'{stem}.json').resolve()
+        i = 0
+        while path.exists():
+            i += 1
+            path = Path(f'{stem}-{i}.json').resolve()
+        return path
 
     def on_mount(self):
         self.focus_main()
@@ -762,10 +807,7 @@ class DetailsScreen(Screen, ScreenStateBase):
                 if context.is_sidebar_visible():
                     context.activate_sidebar_item()
             case 'escape':
-                if context.is_sidebar_visible():
-                    context.hide_sidebar()
-                else:
-                    getattr(context, self.__back)()
+                self.action_exit()
 
 
 class SplashScreen(Screen):
