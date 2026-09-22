@@ -1,6 +1,6 @@
 import pytest
 
-from tests.fakes import FakeClient, FakeContainer, FakeImage
+from tests.fakes import FakeClient, FakeContainer, FakeImage, FakeNetwork
 
 
 @pytest.fixture
@@ -21,5 +21,13 @@ def containers(images):
 
 
 @pytest.fixture
-def client(images, containers):
-    return FakeClient(images=images, containers=containers)
+def networks():
+    return [
+        FakeNetwork('3' * 64, 'bridge'),
+        FakeNetwork('4' * 64, 'app_net', driver='overlay', scope='swarm'),
+    ]
+
+
+@pytest.fixture
+def client(images, containers, networks):
+    return FakeClient(images=images, containers=containers, networks=networks)

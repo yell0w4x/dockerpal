@@ -66,7 +66,7 @@ class ScreenFSM:
 
 
     def set_networks_screen(self):
-        self.notify('Not implemented yet.', severity='warning')
+        self.set_state(NetworksScreen(self, self.__docker_cli))
 
 
     def set_volumes_screen(self):
@@ -476,6 +476,31 @@ class ContainersScreen(ResourceScreen):
         self._cli.containers.get(key).remove()
 
     def open_details(self, container):
+        self.context().notify('Not implemented yet.', severity='warning')
+
+
+class NetworksScreen(ResourceScreen):
+    SCREEN_ID = 'networks-screen'
+    TITLE = 'Networks'
+    COLUMNS = ('Short ID', 'Name', 'Driver', 'Scope')
+
+    def list_items(self):
+        return self._cli.networks.list()
+
+    def item_key(self, network):
+        return network.id
+
+    def item_row(self, network):
+        attrs = network.attrs
+        return network.short_id, network.name, attrs.get('Driver', ''), attrs.get('Scope', '')
+
+    def get_item(self, key):
+        return self._cli.networks.get(key)
+
+    def remove_item(self, key):
+        self._cli.networks.get(key).remove()
+
+    def open_details(self, network):
         self.context().notify('Not implemented yet.', severity='warning')
 
 

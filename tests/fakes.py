@@ -82,7 +82,42 @@ class FakeContainers:
         self.get(container_id).remove(**kwargs)
 
 
+class FakeNetwork:
+    def __init__(self, network_id, name, driver='bridge', scope='local', attrs=None):
+        self.id = network_id
+        self.short_id = network_id[:12]
+        self.name = name
+        self.attrs = attrs or {'Id': self.id, 'Name': name, 'Driver': driver, 'Scope': scope}
+        self.collection = None
+        self.calls = []
+
+    def remove(self):
+        if self.name in ('bridge', 'host', 'none'):
+            raise docker.errors.APIError(
+                'forbidden', explanation=f'{self.name} is a pre-defined network and cannot be removed')
+        self.calls.append('remove')
+        if self.collection is not None:
+            self.collection._networks.pop(self.id, None)
+
+
+class FakeNetworks:
+    def __init__(self, networks):
+        self._networks = {n.id: n for n in networks}
+        for n in networks:
+            n.collection = self
+
+    def list(self, **kwargs):
+        return list(self._networks.values())
+
+    def get(self, network_id, **kwargs):
+        for key, n in self._networks.items():
+            if key == network_id or key.startswith(network_id) or n.name == network_id:
+                return n
+        raise docker.errors.NotFound(f'No such network: {network_id}')
+
+
 class FakeClient:
-    def __init__(self, images=(), containers=()):
+    def __init__(self, images=(), containers=(), networks=()):
         self.images = FakeImages(images)
         self.containers = FakeContainers(containers)
+        self.networks = FakeNetworks(networks)
