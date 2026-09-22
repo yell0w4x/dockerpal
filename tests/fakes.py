@@ -116,8 +116,45 @@ class FakeNetworks:
         raise docker.errors.NotFound(f'No such network: {network_id}')
 
 
+class FakeVolume:
+    def __init__(self, name, driver='local', mountpoint=None, in_use=False, attrs=None):
+        self.id = name
+        self.short_id = name[:12]
+        self.name = name
+        self.in_use = in_use
+        mountpoint = mountpoint or f'/var/lib/docker/volumes/{name}/_data'
+        self.attrs = attrs or {'Name': name, 'Driver': driver, 'Mountpoint': mountpoint}
+        self.collection = None
+        self.calls = []
+
+    def remove(self, force=False):
+        if self.in_use and not force:
+            raise docker.errors.APIError(
+                'conflict', explanation=f'volume {self.name} is in use')
+        self.calls.append('remove')
+        if self.collection is not None:
+            self.collection._volumes.pop(self.name, None)
+
+
+class FakeVolumes:
+    def __init__(self, volumes):
+        self._volumes = {v.name: v for v in volumes}
+        for v in volumes:
+            v.collection = self
+
+    def list(self, **kwargs):
+        return list(self._volumes.values())
+
+    def get(self, name):
+        try:
+            return self._volumes[name]
+        except KeyError:
+            raise docker.errors.NotFound(f'No such volume: {name}')
+
+
 class FakeClient:
-    def __init__(self, images=(), containers=(), networks=()):
+    def __init__(self, images=(), containers=(), networks=(), volumes=()):
         self.images = FakeImages(images)
         self.containers = FakeContainers(containers)
         self.networks = FakeNetworks(networks)
+        self.volumes = FakeVolumes(volumes)

@@ -1,6 +1,6 @@
 import pytest
 
-from tests.fakes import FakeClient, FakeContainer, FakeImage, FakeNetwork
+from tests.fakes import FakeClient, FakeContainer, FakeImage, FakeNetwork, FakeVolume
 
 
 @pytest.fixture
@@ -29,5 +29,13 @@ def networks():
 
 
 @pytest.fixture
-def client(images, containers, networks):
-    return FakeClient(images=images, containers=containers, networks=networks)
+def volumes():
+    return [
+        FakeVolume('pgdata', in_use=True),
+        FakeVolume('5' * 64),
+    ]
+
+
+@pytest.fixture
+def client(images, containers, networks, volumes):
+    return FakeClient(images=images, containers=containers, networks=networks, volumes=volumes)

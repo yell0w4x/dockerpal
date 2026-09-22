@@ -70,7 +70,7 @@ class ScreenFSM:
 
 
     def set_volumes_screen(self):
-        self.notify('Not implemented yet.', severity='warning')
+        self.set_state(VolumesScreen(self, self.__docker_cli))
 
 
     def remember_row(self, screen_id, row):
@@ -501,6 +501,31 @@ class NetworksScreen(ResourceScreen):
         self._cli.networks.get(key).remove()
 
     def open_details(self, network):
+        self.context().notify('Not implemented yet.', severity='warning')
+
+
+class VolumesScreen(ResourceScreen):
+    SCREEN_ID = 'volumes-screen'
+    TITLE = 'Volumes'
+    COLUMNS = ('Name', 'Driver', 'Mountpoint')
+
+    def list_items(self):
+        return self._cli.volumes.list()
+
+    def item_key(self, volume):
+        return volume.name
+
+    def item_row(self, volume):
+        attrs = volume.attrs
+        return volume.name, attrs.get('Driver', ''), attrs.get('Mountpoint', '')
+
+    def get_item(self, key):
+        return self._cli.volumes.get(key)
+
+    def remove_item(self, key):
+        self._cli.volumes.get(key).remove()
+
+    def open_details(self, volume):
         self.context().notify('Not implemented yet.', severity='warning')
 
 
