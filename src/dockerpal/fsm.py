@@ -19,7 +19,7 @@ def compose_sidebar():
         yield ListItem(Label('Images'), id='images-sidebar-item')
         yield ListItem(Label('Containers'), id='containers-sidebar-item')
         yield ListItem(Label('Networks'), id='networks-sidebar-item')
-        yield ListItem(Label('Volumens'), id='volumens-sidebar-item')
+        yield ListItem(Label('Volumes'), id='volumes-sidebar-item')
 
 
 class ScreenStateBase:
@@ -44,13 +44,49 @@ class ScreenStateBase:
 
 
 class ScreenFSM:
+    SIDEBAR_ITEMS = {
+        'images-sidebar-item': 'set_images_screen',
+        'containers-sidebar-item': 'set_containers_screen',
+        'networks-sidebar-item': 'set_networks_screen',
+        'volumes-sidebar-item': 'set_volumes_screen',
+    }
+
     def __init__(self, docker_cli):
         self.__state = None
         self.__docker_cli = docker_cli
+        self.__rows = dict()
 
 
-    def set_images_screen(self, images_list=None):
+    def set_images_screen(self):
         self.set_state(ImagesScreen(self, self.__docker_cli))
+
+
+    def set_containers_screen(self):
+        self.notify('Not implemented yet.', severity='warning')
+
+
+    def set_networks_screen(self):
+        self.notify('Not implemented yet.', severity='warning')
+
+
+    def set_volumes_screen(self):
+        self.notify('Not implemented yet.', severity='warning')
+
+
+    def remember_row(self, screen_id, row):
+        self.__rows[screen_id] = row
+
+
+    def remembered_row(self, screen_id):
+        return self.__rows.get(screen_id)
+
+
+    def activate_sidebar_item(self):
+        sidebar = self.__app().get_child_by_id('sidebar')
+        item = sidebar.highlighted_child
+        if item is None:
+            return
+        getattr(self, self.SIDEBAR_ITEMS[item.id])()
 
 
     def set_image_details_screen(self, image):
@@ -129,15 +165,21 @@ class ScreenFSM:
         return active_app.get()
 
 
-class ImagesScreen(Screen, ScreenStateBase):
-    current_row = None
+class ResourceScreen(Screen, ScreenStateBase):
+    """Base for list screens: a DataTable with multi-row selection, a footer with
+    totals, sidebar navigation and vi-like movement keys.
+
+    Subclasses define SCREEN_ID, TITLE, COLUMNS and the docker accessors."""
+
+    SCREEN_ID = None
+    TITLE = None
+    COLUMNS = ()
     SELECTED_SYMBOL = '[✓]'
 
     BINDINGS = [
         Binding("d,delete", "delete", "Delete"),
         Binding("r", "refresh", "Refresh"),
         Binding("space", "select_row", "Select row"),
-        # Binding("enter", "image_details", "Details"),
         Binding("+", "select_all", "Select all"),
         Binding("-", "deselect_all", "Deselect all"),
         Binding("*", "invert_selection", "Invert selection"),
@@ -151,210 +193,200 @@ class ImagesScreen(Screen, ScreenStateBase):
         Binding("G", "go_down", "Go down", show=False),
     ]
 
-    def __init__(self, ctx, docker_cli, images_list=None):
-        Screen.__init__(self, id='images-screen')
+    def __init__(self, ctx, docker_cli):
+        Screen.__init__(self, id=self.SCREEN_ID)
         ScreenStateBase.__init__(self, ctx)
-        self.__cli = docker_cli
-        table = DataTable(id='images-table', cursor_type='row', zebra_stripes=False)
-        table.add_column(label='Short ID')
-        table.add_column('Tags')
+        self._cli = docker_cli
+        table = DataTable(id=self.table_id(), cursor_type='row', zebra_stripes=False)
+        for column in self.COLUMNS:
+            table.add_column(column)
         self.__double_press = dict()
-        self.__table = table
+        self._table = table
         self.__num_space_pad = 0
         self.__selected_rows = set()
         self.__total_label = Label()
         self.__selected_label = Label()
-        self.renew(images_list)
+        self.renew()
 
+    # --- to be provided by subclasses -------------------------------------
 
-    def renew(self, images_list=None):
-        def tag(image):
-            return ', '.join(image.tags) if image.tags else '<None>'
+    def list_items(self):
+        raise NotImplementedError
 
-        def short_id(image):
-            return image.short_id.split(':')[1]
+    def item_key(self, item):
+        raise NotImplementedError
 
-        def full_id(image):
-            return image.id.split(':')[1]
+    def item_row(self, item):
+        raise NotImplementedError
 
-        images = self.__cli.images.list() if images_list is None else images_list
-        table = self.__table
+    def get_item(self, key):
+        raise NotImplementedError
+
+    def remove_item(self, key):
+        raise NotImplementedError
+
+    def open_details(self, item):
+        raise NotImplementedError
+
+    # ---------------------------------------------------------------------
+
+    @classmethod
+    def table_id(cls):
+        return f'{cls.SCREEN_ID.removesuffix("-screen")}-table'
+
+    def renew(self):
+        items = self.list_items()
+        table = self._table
         table.clear()
-        pad = self.__num_space_pad = len(str(len(images))) + len(self.SELECTED_SYMBOL) + 2
-        {table.add_row(short_id(image), tag(image), key=full_id(image), label=f'{i: <{pad}}'): image for i, image in enumerate(images, 1)}
-        self.__update_footer()
-
+        pad = self.__num_space_pad = len(str(len(items))) + len(self.SELECTED_SYMBOL) + 2
+        for i, item in enumerate(items, 1):
+            table.add_row(*self.item_row(item), key=self.item_key(item), label=f'{i: <{pad}}')
+        self.__selected_rows.clear()
+        self.__update_footer(len(items))
 
     def compose(self):
         yield from compose_sidebar()
-        yield Header(name='Images')
-        yield self.__table
-        # yield Horizontal(self.__total_label, self.__selected_label, id='table-footer')
+        yield Header()
+        yield self._table
         with Horizontal(id="table-footer"):
             yield self.__total_label
             yield self.__selected_label
         yield Footer()
 
-
     def on_state_enter(self, data=None):
-        self.context().set_subtitle('Images')
-        self.context().switch_screen(self)
-        if ImagesScreen.current_row is not None:
-            self.__set_cursor_row(ImagesScreen.current_row)
+        context = self.context()
+        context.set_subtitle(self.TITLE)
+        context.switch_screen(self)
+        row = context.remembered_row(self.SCREEN_ID)
+        if row is not None:
+            self.__set_cursor_row(row)
 
+    def on_state_exit(self):
+        self.context().remember_row(self.SCREEN_ID, self._table.cursor_row)
 
     def on_state_key(self, event: events.Key):
-        table = self.__table
         context = self.context()
         match event.key:
             case 'escape' | 'q':
                 context.exit()
             case 'enter':
                 if context.is_sidebar_visible():
-                     sidebar = context.app().get_child_by_id('sidebar')
-                     match sidebar.highlighted_child.id:
-                        case 'images-sidebar-item':
-                            pass
-                        case 'containers-sidebar-item':
-                            context.notify('Not implemented yet.', severity='warning')
-                        case 'networks-sidebar-item':
-                            context.notify('Not implemented yet.', severity='warning')
-                        case 'volumens-sidebar-item':
-                            context.notify('Not implemented yet.', severity='warning')
-                     
-                else:
-                    ImagesScreen.current_row = table.cursor_row
-                    context.set_image_details_screen(self.__get_row_image(table.cursor_row))
+                    context.activate_sidebar_item()
+                elif self._table.row_count > 0:
+                    self.open_details(self.__get_row_item(self._table.cursor_row))
 
-    
     def action_select_all(self):
-        table = self.__table
+        table = self._table
         sel_rows = self.__selected_rows
         sel_rows.clear()
         for i in range(len(table.rows)):
             self.__toggle_row_sel(i, move_cursor=False)
         self.__update_selected_label()
 
-
     def action_deselect_all(self):
-        table = self.__table
+        table = self._table
         self.__selected_rows = {i for i in range(len(table.rows))}
         for i in range(len(table.rows)):
             self.__toggle_row_sel(i, move_cursor=False)
         self.__update_selected_label()
 
-
     def action_invert_selection(self):
-        table = self.__table
+        table = self._table
         for i in range(len(table.rows)):
             self.__toggle_row_sel(i, move_cursor=False)
         self.__update_selected_label()
 
-
     def action_select_row(self):
+        if self._table.row_count == 0:
+            return
         self.__toggle_row_sel()
         self.__update_selected_label()
 
-
     def action_down(self):
-        self.__table.action_cursor_down()
+        self._table.action_cursor_down()
 
-   
     def action_up(self):
-        self.__table.action_cursor_up()
-
+        self._table.action_cursor_up()
 
     def action_page_down(self):
-        self.__table.action_page_down()
-
+        self._table.action_page_down()
 
     def action_page_up(self):
-        self.__table.action_page_up()
-
+        self._table.action_page_up()
 
     def action_go_up(self):
-        table = self.__table
+        table = self._table
         dp = self.__double_press
         before = dp.get('g')
         if before is None:
             dp['g'] = monotonic()
             return
-        
+
         now = monotonic()
         if now - dp.get('g') < 0.2:
             table.action_scroll_top()
             dp.pop('g', None)
             return
-        
+
         dp['g'] = now
 
-
     def action_go_down(self):
-        self.__table.action_scroll_bottom()
-
+        self._table.action_scroll_bottom()
 
     def action_delete(self):
-        def remove_image(row_index):
-            rows = tuple(table.rows.items())
-            row_key, _ = rows[row_index]
-            self.__cli.images.remove(row_key.value)
+        self.apply_to_selection(self.remove_item)
 
-        table = self.__table
+    def apply_to_selection(self, func):
+        """Run ``func(key)`` on the selected rows, or on the cursor row when
+        nothing is selected, then reload the table."""
+        table = self._table
+        if table.row_count == 0:
+            return
+
         sel_rows = self.__selected_rows
         cursor_row = table.cursor_row
+        targets = sorted(sel_rows) if sel_rows else [cursor_row]
         try:
-            if not sel_rows:
-                remove_image(cursor_row)
-            else:
-                for i in sel_rows:
-                    remove_image(i)
-                sel_rows.clear()
+            for i in targets:
+                func(self.__get_row_key(i))
         except docker.errors.APIError as e:
-            self.context().notify(e.explanation, severity='error')
-        else:
+            self.context().notify(e.explanation or str(e), severity='error')
+        finally:
             self.renew()
             self.__set_cursor_row(cursor_row)
-            self.__update_selected_label()
-
 
     def action_refresh(self):
         self.renew()
 
-
     def action_sidebar(self):
         self.context().toggle_sidebar()
 
-
     def on_mount(self):
-        self.get_child_by_id('images-table').focus()
-
+        self._table.focus()
 
     def __set_cursor_row(self, row_index):
-        table = self.__table
+        table = self._table
         if table.row_count > row_index:
             table.move_cursor(row=row_index)
         elif table.row_count > 0:
             table.move_cursor(row=table.row_count - 1)
 
-    
-    def __update_footer(self):
-        self.__total_label.update(f'Total: {len(self.__cli.images.list())}')
-        self.__selected_label.update(f'Selected: {len(self.__selected_rows)}')
-
+    def __update_footer(self, total):
+        self.__total_label.update(f'Total: {total}')
+        self.__update_selected_label()
 
     def __update_selected_label(self):
         self.__selected_label.update(f'Selected: {len(self.__selected_rows)}')
 
-
     def __toggle_row_sel(self, cursor_row=None, move_cursor=True):
         if cursor_row is None:
-            cursor_row = self.__table.cursor_row
+            cursor_row = self._table.cursor_row
 
-        table = self.__table
+        table = self._table
         rows = tuple(table.rows.items())
         row_key, row = rows[cursor_row]
         col_key, _ = next(iter(table.columns.items()))
-        
+
         sel_rows = self.__selected_rows
         if cursor_row in sel_rows:
             sel_rows.remove(cursor_row)
@@ -364,17 +396,45 @@ class ImagesScreen(Screen, ScreenStateBase):
             row.label.style = Style(color='#FA8072')
             row.label.set_length(len(self.SELECTED_SYMBOL))
             row.label.append('[✓]')
-        
+
         cell_val = table.get_cell(row_key, col_key)
         table.update_cell(row_key, col_key, cell_val, update_width=True)
         if move_cursor:
             table.action_cursor_down()
 
-    
-    def __get_row_image(self, row_index):
-        rows = tuple(self.__table.rows.items())
+    def __get_row_key(self, row_index):
+        rows = tuple(self._table.rows.items())
         row_key, _ = rows[row_index]
-        return self.__cli.images.get(row_key.value)
+        return row_key.value
+
+    def __get_row_item(self, row_index):
+        return self.get_item(self.__get_row_key(row_index))
+
+
+class ImagesScreen(ResourceScreen):
+    SCREEN_ID = 'images-screen'
+    TITLE = 'Images'
+    COLUMNS = ('Short ID', 'Tags')
+
+    def list_items(self):
+        return self._cli.images.list()
+
+    def item_key(self, image):
+        return image.id.split(':')[1]
+
+    def item_row(self, image):
+        short_id = image.short_id.split(':')[1]
+        tags = ', '.join(image.tags) if image.tags else '<None>'
+        return short_id, tags
+
+    def get_item(self, key):
+        return self._cli.images.get(key)
+
+    def remove_item(self, key):
+        self._cli.images.remove(key)
+
+    def open_details(self, image):
+        self.context().set_image_details_screen(image)
 
 
 class ImageDetailsScreen(Screen, ScreenStateBase):
@@ -419,16 +479,8 @@ class ImageDetailsScreen(Screen, ScreenStateBase):
         context = self.context()
         match event.key:
             case 'enter':
-                sidebar = context.app().get_child_by_id('sidebar')
-                match sidebar.highlighted_child.id:
-                    case 'images-sidebar-item':
-                        pass
-                    case 'containers-sidebar-item':
-                        context.notify('Not implemented yet.', severity='warning')
-                    case 'networks-sidebar-item':
-                        context.notify('Not implemented yet.', severity='warning')
-                    case 'volumens-sidebar-item':
-                        context.notify('Not implemented yet.', severity='warning')
+                if context.is_sidebar_visible():
+                    context.activate_sidebar_item()
             case 'escape':
                 context.set_images_screen()
             case 's':
