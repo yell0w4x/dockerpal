@@ -32,13 +32,22 @@ class FakeImages:
 
 
 class FakeContainer:
-    def __init__(self, container_id, name, image, status='running', attrs=None):
+    def __init__(self, container_id, name, image_name, status='running', attrs=None):
         self.id = container_id
         self.short_id = container_id[:12]
         self.name = name
-        self.image = image
         self.status = status
-        self.attrs = attrs or {'Id': self.id, 'Name': f'/{name}', 'State': {'Status': status}}
+        self.attrs = attrs or {
+            'Id': self.id, 'Name': f'/{name}', 'State': {'Status': status},
+            'Config': {'Image': image_name},
+        }
+        self.calls = []
+        self.collection = None
+
+    @property
+    def image(self):
+        # Real SDK: an API round-trip that raises when the image is gone.
+        raise docker.errors.ImageNotFound('No such image')
         self.calls = []
         self.collection = None
 

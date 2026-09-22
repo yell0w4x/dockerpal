@@ -15,8 +15,8 @@ def images():
 @pytest.fixture
 def containers(images):
     return [
-        FakeContainer('1' * 64, 'web', images[0], status='running'),
-        FakeContainer('2' * 64, 'db', images[1], status='exited'),
+        FakeContainer('1' * 64, 'web', 'alpine:latest', status='running'),
+        FakeContainer('2' * 64, 'db', 'ubuntu:22.04', status='exited'),
     ]
 
 

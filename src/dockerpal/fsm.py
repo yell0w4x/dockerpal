@@ -486,9 +486,10 @@ class ContainersScreen(ResourceScreen):
         return container.id
 
     def item_row(self, container):
-        image = container.image
-        image_name = image.tags[0] if image is not None and image.tags else (
-            image.short_id.split(':')[-1] if image is not None else '<None>')
+        # Like `docker ps`: the image name the container was created with.
+        # (container.image would be an extra API call per row and fails if
+        # the image has since been removed.)
+        image_name = container.attrs.get('Config', {}).get('Image') or '<None>'
         return container.short_id, container.name, image_name, container.status
 
     def get_item(self, key):
