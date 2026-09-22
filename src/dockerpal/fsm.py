@@ -185,10 +185,10 @@ class ResourceScreen(Screen, ScreenStateBase):
     """Base for list screens: a DataTable with multi-row selection, a footer with
     totals, sidebar navigation and vi-like movement keys.
 
-    Subclasses define SCREEN_ID, TITLE, COLUMNS and the docker accessors."""
+    Subclasses define SCREEN_ID, HEADING, COLUMNS and the docker accessors."""
 
     SCREEN_ID = None
-    TITLE = None
+    HEADING = None
     ITEM_NAME = 'item'
     COLUMNS = ()
     SELECTED_SYMBOL = '[✓]'
@@ -272,7 +272,7 @@ class ResourceScreen(Screen, ScreenStateBase):
 
     def on_state_enter(self, data=None):
         context = self.context()
-        context.set_subtitle(self.TITLE)
+        context.set_subtitle(self.HEADING)
         context.switch_screen(self)
         row = context.remembered_row(self.SCREEN_ID)
         if row is not None:
@@ -452,7 +452,7 @@ class ResourceScreen(Screen, ScreenStateBase):
 
 class ImagesScreen(ResourceScreen):
     SCREEN_ID = 'images-screen'
-    TITLE = 'Images'
+    HEADING = 'Images'
     ITEM_NAME = 'image'
     COLUMNS = ('Short ID', 'Tags')
 
@@ -479,9 +479,9 @@ class ImagesScreen(ResourceScreen):
 
 class ContainersScreen(ResourceScreen):
     SCREEN_ID = 'containers-screen'
-    TITLE = 'Containers'
+    HEADING = 'Containers'
     ITEM_NAME = 'container'
-    COLUMNS = ('Short ID', 'Name', 'Image', 'Status')
+    COLUMNS = ('Short ID', 'Name', 'Status', 'Image')
 
     BINDINGS = ResourceScreen.BINDINGS + [
         Binding("u", "start", "Start"),
@@ -509,7 +509,7 @@ class ContainersScreen(ResourceScreen):
         # (container.image would be an extra API call per row and fails if
         # the image has since been removed.)
         image_name = container.attrs.get('Config', {}).get('Image') or '<None>'
-        return container.short_id, container.name, image_name, container.status
+        return container.short_id, container.name, container.status, image_name
 
     def get_item(self, key):
         return self._cli.containers.get(key)
@@ -523,7 +523,7 @@ class ContainersScreen(ResourceScreen):
 
 class NetworksScreen(ResourceScreen):
     SCREEN_ID = 'networks-screen'
-    TITLE = 'Networks'
+    HEADING = 'Networks'
     ITEM_NAME = 'network'
     COLUMNS = ('Short ID', 'Name', 'Driver', 'Scope')
 
@@ -549,7 +549,7 @@ class NetworksScreen(ResourceScreen):
 
 class VolumesScreen(ResourceScreen):
     SCREEN_ID = 'volumes-screen'
-    TITLE = 'Volumes'
+    HEADING = 'Volumes'
     ITEM_NAME = 'volume'
     COLUMNS = ('Name', 'Driver', 'Mountpoint')
 

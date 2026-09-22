@@ -22,3 +22,12 @@ async def test_images_table_shows_short_id_and_tags(client):
         assert rows[0] == ['a' * 12, 'alpine:latest']
         assert rows[1] == ['b' * 12, 'ubuntu:22.04, ubuntu:jammy']
         assert rows[2] == ['c' * 12, '<None>']
+
+
+async def test_header_shows_app_title_and_screen_subtitle(client):
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.title == 'DockerPal'
+        assert app.screen.title is None  # header falls back to the app title
+        assert app.sub_title == 'Images'

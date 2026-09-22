@@ -32,8 +32,8 @@ async def test_containers_table_lists_all_containers(client):
         table = containers_table(app)
         rows = [table.get_row_at(i) for i in range(table.row_count)]
         assert rows == [
-            ['1' * 12, 'web', 'alpine:latest', 'running'],
-            ['2' * 12, 'db', 'ubuntu:22.04', 'exited'],
+            ['1' * 12, 'web', 'running', 'alpine:latest'],
+            ['2' * 12, 'db', 'exited', 'ubuntu:22.04'],
         ]
 
 
@@ -45,7 +45,7 @@ async def test_stop_container_under_cursor(client, containers):
         await pilot.press('x')
         await pilot.pause()
         assert containers[0].calls == ['stop']
-        assert containers_table(app).get_row_at(0)[3] == 'exited'
+        assert containers_table(app).get_row_at(0)[2] == 'exited'
 
 
 async def test_start_container_under_cursor(client, containers):
@@ -57,7 +57,7 @@ async def test_start_container_under_cursor(client, containers):
         await pilot.press('u')
         await pilot.pause()
         assert containers[1].calls == ['start']
-        assert containers_table(app).get_row_at(1)[3] == 'running'
+        assert containers_table(app).get_row_at(1)[2] == 'running'
 
 
 async def test_restart_selected_containers(client, containers):
