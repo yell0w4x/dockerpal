@@ -93,6 +93,12 @@ class ScreenFSM:
         self.set_state(ImageDetailsScreen(self, image))
 
 
+    def set_details_screen(self, item, title, back):
+        """Show ``item.attrs`` as JSON; ``back`` is the FSM method name to
+        call on Escape."""
+        self.set_state(DetailsScreen(self, item, title, back))
+
+
     def set_state(self, state, data=None):
         if self.__state is not None:
             self.__state.on_state_exit()
@@ -476,7 +482,7 @@ class ContainersScreen(ResourceScreen):
         self._cli.containers.get(key).remove()
 
     def open_details(self, container):
-        self.context().notify('Not implemented yet.', severity='warning')
+        self.context().set_details_screen(container, 'Container details', 'set_containers_screen')
 
 
 class NetworksScreen(ResourceScreen):
@@ -501,7 +507,7 @@ class NetworksScreen(ResourceScreen):
         self._cli.networks.get(key).remove()
 
     def open_details(self, network):
-        self.context().notify('Not implemented yet.', severity='warning')
+        self.context().set_details_screen(network, 'Network details', 'set_networks_screen')
 
 
 class VolumesScreen(ResourceScreen):
@@ -526,7 +532,52 @@ class VolumesScreen(ResourceScreen):
         self._cli.volumes.get(key).remove()
 
     def open_details(self, volume):
-        self.context().notify('Not implemented yet.', severity='warning')
+        self.context().set_details_screen(volume, 'Volume details', 'set_volumes_screen')
+
+
+class DetailsScreen(Screen, ScreenStateBase):
+    BINDINGS = [
+        Binding("escape", "exit", "Go back"),
+        Binding("s", "sidebar", "Sidebar"),
+    ]
+
+    def __init__(self, ctx, item, title, back):
+        Screen.__init__(self, id='details-screen')
+        ScreenStateBase.__init__(self, ctx)
+        self.__item = item
+        self.__title = title
+        self.__back = back
+
+    def on_mount(self):
+        self.get_child_by_id('details').focus()
+
+    def on_state_enter(self, data=None):
+        self.context().set_subtitle(self.__title)
+        self.context().switch_screen(self)
+
+    def compose(self):
+        yield from compose_sidebar()
+        yield Header()
+        yield Footer()
+        try:
+            details = json.dumps(self.__item.attrs, indent=4)
+        except (TypeError, ValueError) as e:
+            yield TextArea(f'Unable to render details: {e}', read_only=True, id='details')
+            self.context().notify(f'Unable to render details: {e}', severity='error')
+        else:
+            yield TextArea(details, read_only=True, language='json', id='details')
+
+    def action_sidebar(self):
+        self.context().toggle_sidebar()
+
+    def on_state_key(self, event: events.Key):
+        context = self.context()
+        match event.key:
+            case 'enter':
+                if context.is_sidebar_visible():
+                    context.activate_sidebar_item()
+            case 'escape':
+                getattr(context, self.__back)()
 
 
 class ImageDetailsScreen(Screen, ScreenStateBase):
