@@ -18,14 +18,14 @@ dockerpal
 | --- | --- |
 | `s` | Toggle the sidebar (Images / Containers / Networks / Volumes); `Enter` opens the highlighted screen |
 | `j` / `k`, `f` / `b`, `gg` / `G` | Move down / up, page down / up, jump to top / bottom |
-| `Space` | Select / deselect the row under the cursor |
-| `+` / `-` / `*` | Select all / deselect all / invert selection |
+| `Space` | Select / deselect the row under the cursor (selection survives searching, refreshing and filtering) |
+| `+` / `-` / `*` | Select all / deselect all / invert selection (visible rows only) |
 | `Enter` | Show the JSON details of the row under the cursor |
 | `d` / `Delete` | Delete the selected rows (or the cursor row) after confirmation |
 | `u` / `x` / `t` | Containers only: start / stop / restart the selected rows (or the cursor row) |
-| `/` | Search: filter the list as you type; `Enter` keeps the filter, `Esc` drops it |
+| `/` | Search: filter the list as you type. `Enter` keeps the filter (shown as `/query` in the footer), `Esc` abandons it |
 | `r` | Refresh the list |
-| `Esc` | Close the sidebar / go back / quit |
+| `Esc` | Close the sidebar, else clear an active filter, else go back / quit |
 | `q` | Quit |
 
 ## Development

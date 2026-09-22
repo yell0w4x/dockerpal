@@ -156,3 +156,48 @@ async def test_search_prompt_is_shown_while_searching(client):
         await pilot.press('escape')
         await pilot.pause()
         assert prompt.display is False
+
+
+async def test_active_filter_is_shown_in_the_footer_after_enter(client):
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('slash')
+        await pilot.press(*'ubuntu')
+        await pilot.press('enter')
+        await pilot.pause()
+        prompt = app.screen.query_one('#search-prompt', Label)
+        assert prompt.display is True
+        assert str(prompt.content) == '/ubuntu'
+        assert search_input(app).display is False
+
+
+async def test_escape_clears_an_active_filter_before_quitting(client):
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('slash')
+        await pilot.press(*'ubuntu')
+        await pilot.press('enter')
+        await pilot.pause()
+        await pilot.press('escape')
+        await pilot.pause()
+        assert images_table(app).row_count == 3
+        assert total_text(app) == 'Total: 3'
+        assert app.screen.query_one('#search-prompt', Label).display is False
+        assert not app._exit
+        await pilot.press('escape')
+        await pilot.pause()
+        assert app._exit
+
+
+async def test_reopening_search_keeps_the_previous_query(client):
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('slash')
+        await pilot.press(*'ubuntu')
+        await pilot.press('enter')
+        await pilot.press('slash')
+        await pilot.pause()
+        assert search_input(app).value == 'ubuntu'

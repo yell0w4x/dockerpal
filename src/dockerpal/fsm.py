@@ -232,7 +232,7 @@ class ResourceScreen(Screen, ScreenStateBase):
         self.__double_press = dict()
         self._table = table
         self.__num_space_pad = 0
-        self.__selected_rows = set()
+        self.__selected = set()
         self.__total_label = Label()
         self.__selected_label = Label()
         self.__search = SearchInput(placeholder=f'Search {self.ITEM_NAME}s...', id='search')
@@ -271,15 +271,16 @@ class ResourceScreen(Screen, ScreenStateBase):
 
     def renew(self):
         items = self.list_items()
-        rows = [(item, self.item_row(item)) for item in items]
-        shown = [(item, row) for item, row in rows if self.__matches(row)]
+        rows = [(self.item_key(item), self.item_row(item)) for item in items]
+        shown = [(key, row) for key, row in rows if self.__matches(row)]
+        # Items that are gone (deleted elsewhere, say) leave the selection.
+        self.__selected &= {key for key, _ in rows}
 
         table = self._table
         table.clear()
-        pad = self.__num_space_pad = len(str(len(shown))) + len(self.SELECTED_SYMBOL) + 2
-        for i, (item, row) in enumerate(shown, 1):
-            table.add_row(*row, key=self.item_key(item), label=f'{i: <{pad}}')
-        self.__selected_rows.clear()
+        self.__num_space_pad = len(str(len(shown))) + len(self.SELECTED_SYMBOL) + 2
+        for i, (key, row) in enumerate(shown, 1):
+            table.add_row(*row, key=key, label=self.__row_label(i, key in self.__selected))
         self.__update_footer(len(shown), len(rows))
 
     def __matches(self, row):
@@ -316,6 +317,8 @@ class ResourceScreen(Screen, ScreenStateBase):
             case 'escape':
                 if context.is_sidebar_visible():
                     context.hide_sidebar()
+                elif self.has_filter():
+                    self.clear_search()
                 else:
                     context.exit()
             case 'enter':
@@ -325,25 +328,14 @@ class ResourceScreen(Screen, ScreenStateBase):
                     self.open_details(self.__get_row_item(self._table.cursor_row))
 
     def action_select_all(self):
-        table = self._table
-        sel_rows = self.__selected_rows
-        sel_rows.clear()
-        for i in range(len(table.rows)):
-            self.__toggle_row_sel(i, move_cursor=False)
-        self.__update_selected_label()
+        """Select every visible row (rows hidden by a search keep their state)."""
+        self.__set_visible_selection(lambda selected: True)
 
     def action_deselect_all(self):
-        table = self._table
-        self.__selected_rows = {i for i in range(len(table.rows))}
-        for i in range(len(table.rows)):
-            self.__toggle_row_sel(i, move_cursor=False)
-        self.__update_selected_label()
+        self.__set_visible_selection(lambda selected: False)
 
     def action_invert_selection(self):
-        table = self._table
-        for i in range(len(table.rows)):
-            self.__toggle_row_sel(i, move_cursor=False)
-        self.__update_selected_label()
+        self.__set_visible_selection(lambda selected: not selected)
 
     def action_select_row(self):
         if self._table.row_count == 0:
@@ -397,18 +389,16 @@ class ResourceScreen(Screen, ScreenStateBase):
         self.app.push_screen(ConfirmScreen(question), on_answer)
 
     def apply_to_selection(self, func):
-        """Run ``func(key)`` on the selected rows, or on the cursor row when
+        """Run ``func(key)`` on the selected items, or on the cursor row when
         nothing is selected, then reload the table."""
-        table = self._table
-        if table.row_count == 0:
+        targets = self.__selection_keys()
+        if not targets:
             return
 
-        sel_rows = self.__selected_rows
-        cursor_row = table.cursor_row
-        targets = sorted(sel_rows) if sel_rows else [cursor_row]
+        cursor_row = self._table.cursor_row
         try:
-            for i in targets:
-                func(self.__get_row_key(i))
+            for key in targets:
+                func(key)
         except docker.errors.APIError as e:
             self.context().notify(e.explanation or str(e), severity='error')
         finally:
@@ -425,16 +415,25 @@ class ResourceScreen(Screen, ScreenStateBase):
         search = self.__search
         self.__query_before_search = self.__query
         search.display = True
-        self.__search_prompt.display = True
         search.value = self.__query
+        self.__update_search_prompt(editing=True)
         search.focus()
 
     def cancel_search(self):
-        """Close the search box, dropping the filter it was editing."""
+        """Close the search box, going back to the filter it was opened with."""
         if self.__query != self.__query_before_search:
             self.__query = self.__query_before_search
             self.renew()
         self.__close_search()
+
+    def clear_search(self):
+        """Drop the active filter and show every row again."""
+        self.__query = ''
+        self.renew()
+        self.__close_search()
+
+    def has_filter(self):
+        return bool(self.__query)
 
     def on_input_changed(self, event: Input.Changed):
         if event.input is self.__search:
@@ -450,8 +449,15 @@ class ResourceScreen(Screen, ScreenStateBase):
 
     def __close_search(self):
         self.__search.display = False
-        self.__search_prompt.display = False
+        self.__update_search_prompt(editing=False)
         self.focus_main()
+
+    def __update_search_prompt(self, editing):
+        """While editing show a bare '/'; afterwards keep '/query' as a
+        reminder that rows are hidden (Escape clears it)."""
+        prompt = self.__search_prompt
+        prompt.display = editing or self.has_filter()
+        prompt.update('/' if editing else f'/{self.__query}')
 
     def on_mount(self):
         self.focus_main()
@@ -472,7 +478,7 @@ class ResourceScreen(Screen, ScreenStateBase):
         self.__update_selected_label()
 
     def __update_selected_label(self):
-        self.__selected_label.update(f'Selected: {len(self.__selected_rows)}')
+        self.__selected_label.update(f'Selected: {len(self.__selected)}')
 
     def __toggle_row_sel(self, cursor_row=None, move_cursor=True):
         if cursor_row is None:
@@ -483,25 +489,46 @@ class ResourceScreen(Screen, ScreenStateBase):
         row_key, row = rows[cursor_row]
         col_key, _ = next(iter(table.columns.items()))
 
-        sel_rows = self.__selected_rows
-        if cursor_row in sel_rows:
-            sel_rows.remove(cursor_row)
-            row.label = Text(f'{cursor_row + 1: <{self.__num_space_pad}}')
+        selected = self.__selected
+        key = row_key.value
+        if key in selected:
+            selected.remove(key)
         else:
-            sel_rows.add(cursor_row)
-            row.label.style = Style(color='#FA8072')
-            row.label.set_length(len(self.SELECTED_SYMBOL))
-            row.label.append('[✓]')
+            selected.add(key)
+        row.label = self.__row_label(cursor_row + 1, key in selected)
 
+        # Updating a cell is what makes the table redraw the row label.
         cell_val = table.get_cell(row_key, col_key)
         table.update_cell(row_key, col_key, cell_val, update_width=True)
         if move_cursor:
             table.action_cursor_down()
 
-    def __selection_size(self):
+    def __selection_keys(self):
+        """The selected item keys, or the cursor row when nothing is selected."""
+        if self.__selected:
+            return sorted(self.__selected)
         if self._table.row_count == 0:
-            return 0
-        return len(self.__selected_rows) or 1
+            return []
+        return [self.__get_row_key(self._table.cursor_row)]
+
+    def __selection_size(self):
+        return len(self.__selection_keys())
+
+    def __set_visible_selection(self, decide):
+        """Apply ``decide(is_selected)`` to every visible row."""
+        for i in range(self._table.row_count):
+            key = self.__get_row_key(i)
+            if decide(key in self.__selected) != (key in self.__selected):
+                self.__toggle_row_sel(i, move_cursor=False)
+        self.__update_selected_label()
+
+    def __row_label(self, index, selected):
+        pad = self.__num_space_pad
+        if not selected:
+            return Text(f'{index: <{pad}}')
+        label = Text(f'{index: <{len(self.SELECTED_SYMBOL)}}', style=Style(color='#FA8072'))
+        label.append(self.SELECTED_SYMBOL)
+        return label
 
     def __get_row_key(self, row_index):
         rows = tuple(self._table.rows.items())
