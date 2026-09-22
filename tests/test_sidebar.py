@@ -41,3 +41,16 @@ async def test_sidebar_highlights_current_screen(client):
         await pilot.press('s')
         await pilot.pause()
         assert sidebar(app).highlighted_child.id == 'containers-sidebar-item'
+
+
+async def test_selecting_current_screen_in_sidebar_just_closes_it(client):
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('s')
+        await pilot.press('enter')
+        await pilot.pause()
+        assert app.screen.id == 'images-screen'
+        assert sidebar(app).styles.display == 'none'
+        assert app.focused.id == 'images-table'
+        assert [n.message for n in app._notifications] == []

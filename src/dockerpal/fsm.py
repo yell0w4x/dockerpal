@@ -90,6 +90,11 @@ class ScreenFSM:
         item = sidebar.highlighted_child
         if item is None:
             return
+        target = item.id.removesuffix('-sidebar-item')
+        if self.__state.id == f'{target}-screen':
+            # Already there: a fresh screen with the same id can't be mounted.
+            self.hide_sidebar()
+            return
         getattr(self, self.SIDEBAR_ITEMS[item.id])()
 
 
