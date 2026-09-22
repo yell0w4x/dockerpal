@@ -38,3 +38,27 @@ async def test_sidebar_works_from_details_screen(client):
         assert app.screen.id == 'details-screen'
         await goto_containers(pilot)
         assert app.screen.id == 'containers-screen'
+
+
+async def test_details_footer_only_offers_keys_that_work(client):
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        assert app.screen.id == 'details-screen'
+        shown = {(b.key, b.description) for b in app.screen._bindings.shown_keys}
+        assert shown == {('escape', 'Go back'), ('s', 'Sidebar')}
+
+
+async def test_details_ignores_the_actions_and_search_keys(client):
+    app = DockerPalApp(docker_cli=client)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press('enter')
+        await pilot.pause()
+        await pilot.press('a')
+        await pilot.press('slash')
+        await pilot.pause()
+        assert app.screen.id == 'details-screen'
+        assert [n.message for n in app._notifications] == []

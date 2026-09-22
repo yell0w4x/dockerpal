@@ -720,8 +720,6 @@ class VolumesScreen(ResourceScreen):
 class DetailsScreen(Screen, ScreenStateBase):
     BINDINGS = [
         Binding("escape", "exit", "Go back"),
-        Binding("a", "actions", "Actions"),
-        Binding("slash", "search", "Search"),
         Binding("s", "sidebar", "Sidebar"),
     ]
 
