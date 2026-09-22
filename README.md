@@ -20,13 +20,26 @@ dockerpal
 | `j` / `k`, `f` / `b`, `gg` / `G` | Move down / up, page down / up, jump to top / bottom |
 | `Space` | Select / deselect the row under the cursor (selection survives searching, refreshing and filtering) |
 | `+` / `-` / `*` | Select all / deselect all / invert selection (visible rows only) |
+| `a` | Actions menu for the current screen (acts on the selection; `Enter` runs, `Esc` closes) |
 | `Enter` | Show the JSON details of the row under the cursor |
-| `d` / `Delete` | Delete the selected rows (or the cursor row) after confirmation |
+| `d` / `Delete` | Remove the selected rows (or the cursor row) after confirmation |
 | `u` / `x` / `t` | Containers only: start / stop / restart the selected rows (or the cursor row) |
 | `/` | Search: filter the list as you type. `Enter` keeps the filter (shown as `/query` in the footer), `Esc` abandons it |
 | `r` | Refresh the list |
 | `Esc` | Close the sidebar, else clear an active filter, else go back / quit |
 | `q` | Quit |
+
+### Actions menu
+
+`a` opens the actions the current screen offers, applied to the selection (or the
+cursor row when nothing is selected):
+
+| Screen | Actions |
+| --- | --- |
+| Images | Remove, Force remove, Details |
+| Containers | Start, Stop, Restart, Remove, Force remove, Details |
+| Networks | Remove, Details |
+| Volumes | Remove, Force remove, Details |
 
 ## Development
 

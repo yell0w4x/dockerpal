@@ -104,7 +104,7 @@ async def test_delete_acts_on_the_whole_selection(client):
         await pilot.press('enter')
         await pilot.press('d')
         await pilot.pause()
-        assert 'Delete 1 image' in str(app.screen.query_one('#question').content)
+        assert 'Remove 1 image' in str(app.screen.query_one('#question').content)
         await pilot.press('y')
         await pilot.pause()
         assert client.images.removed == ['sha256:' + 'a' * 64]

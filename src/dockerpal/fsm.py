@@ -202,15 +202,21 @@ class ResourceScreen(Screen, ScreenStateBase):
     HEADING = None
     ITEM_NAME = 'item'
     COLUMNS = ()
+    # (label, action name, key hint) offered by the actions menu; 'foo' runs action_foo.
+    ACTIONS = (
+        ('Remove', 'delete', 'd'),
+        ('Details', 'details', 'enter'),
+    )
     SELECTED_SYMBOL = '[✓]'
 
     BINDINGS = [
-        Binding("d,delete", "delete", "Delete"),
+        Binding("d,delete", "delete", "Remove"),
         Binding("r", "refresh", "Refresh"),
         Binding("space", "select_row", "Select row"),
         Binding("+", "select_all", "Select all"),
         Binding("-", "deselect_all", "Deselect all"),
         Binding("*", "invert_selection", "Invert selection"),
+        Binding("a", "actions", "Actions"),
         Binding("slash", "search", "Search"),
         Binding("s", "sidebar", "Sidebar"),
         Binding("q,escape", "exit", "Exit"),
@@ -257,7 +263,7 @@ class ResourceScreen(Screen, ScreenStateBase):
     def get_item(self, key):
         raise NotImplementedError
 
-    def remove_item(self, key):
+    def remove_item(self, key, force=False):
         raise NotImplementedError
 
     def open_details(self, item):
@@ -324,8 +330,8 @@ class ResourceScreen(Screen, ScreenStateBase):
             case 'enter':
                 if context.is_sidebar_visible():
                     context.activate_sidebar_item()
-                elif self._table.row_count > 0:
-                    self.open_details(self.__get_row_item(self._table.cursor_row))
+                else:
+                    self.action_details()
 
     def action_select_all(self):
         """Select every visible row (rows hidden by a search keep their state)."""
@@ -375,18 +381,44 @@ class ResourceScreen(Screen, ScreenStateBase):
         self._table.action_scroll_bottom()
 
     def action_delete(self):
+        self.__confirm_remove('Remove', force=False)
+
+    def action_force_delete(self):
+        self.__confirm_remove('Force remove', force=True)
+
+    def action_details(self):
+        if self._table.row_count > 0:
+            self.open_details(self.__get_row_item(self._table.cursor_row))
+
+    def action_actions(self):
+        """Show the actions menu for the current selection."""
         count = self.__selection_size()
         if count == 0:
             return
+
+        def on_choice(name):
+            if name is not None:
+                getattr(self, f'action_{name}')()
+            else:
+                self.focus_main()
+
+        self.app.push_screen(ActionsMenu(f'Actions: {self.__count_phrase(count)}', self.ACTIONS), on_choice)
+
+    def __count_phrase(self, count):
         noun = self.ITEM_NAME if count == 1 else f'{self.ITEM_NAME}s'
-        question = f'Delete {count} {noun}?'
+        return f'{count} {noun}'
+
+    def __confirm_remove(self, verb, force):
+        count = self.__selection_size()
+        if count == 0:
+            return
 
         def on_answer(confirmed):
             if confirmed:
-                self.apply_to_selection(self.remove_item)
+                self.apply_to_selection(lambda key: self.remove_item(key, force=force))
             self.focus_main()
 
-        self.app.push_screen(ConfirmScreen(question), on_answer)
+        self.app.push_screen(ConfirmScreen(f'{verb} {self.__count_phrase(count)}?'), on_answer)
 
     def apply_to_selection(self, func):
         """Run ``func(key)`` on the selected items, or on the cursor row when
@@ -544,6 +576,11 @@ class ImagesScreen(ResourceScreen):
     HEADING = 'Images'
     ITEM_NAME = 'image'
     COLUMNS = ('Short ID', 'Tags')
+    ACTIONS = (
+        ('Remove', 'delete', 'd'),
+        ('Force remove', 'force_delete', ''),
+        ('Details', 'details', 'enter'),
+    )
 
     def list_items(self):
         return self._cli.images.list()
@@ -559,8 +596,8 @@ class ImagesScreen(ResourceScreen):
     def get_item(self, key):
         return self._cli.images.get(key)
 
-    def remove_item(self, key):
-        self._cli.images.remove(key)
+    def remove_item(self, key, force=False):
+        self._cli.images.remove(key, force=force)
 
     def open_details(self, image):
         self.context().set_details_screen(image, 'Image details', 'set_images_screen')
@@ -571,6 +608,14 @@ class ContainersScreen(ResourceScreen):
     HEADING = 'Containers'
     ITEM_NAME = 'container'
     COLUMNS = ('Short ID', 'Name', 'Status', 'Image')
+    ACTIONS = (
+        ('Start', 'start', 'u'),
+        ('Stop', 'stop', 'x'),
+        ('Restart', 'restart', 't'),
+        ('Remove', 'delete', 'd'),
+        ('Force remove', 'force_delete', ''),
+        ('Details', 'details', 'enter'),
+    )
 
     BINDINGS = [
         Binding("u", "start", "Start"),
@@ -603,8 +648,8 @@ class ContainersScreen(ResourceScreen):
     def get_item(self, key):
         return self._cli.containers.get(key)
 
-    def remove_item(self, key):
-        self._cli.containers.get(key).remove()
+    def remove_item(self, key, force=False):
+        self._cli.containers.get(key).remove(force=force)
 
     def open_details(self, container):
         self.context().set_details_screen(container, 'Container details', 'set_containers_screen')
@@ -615,6 +660,10 @@ class NetworksScreen(ResourceScreen):
     HEADING = 'Networks'
     ITEM_NAME = 'network'
     COLUMNS = ('Short ID', 'Name', 'Driver', 'Scope')
+    ACTIONS = (
+        ('Remove', 'delete', 'd'),
+        ('Details', 'details', 'enter'),
+    )
 
     def list_items(self):
         return self._cli.networks.list()
@@ -629,7 +678,8 @@ class NetworksScreen(ResourceScreen):
     def get_item(self, key):
         return self._cli.networks.get(key)
 
-    def remove_item(self, key):
+    def remove_item(self, key, force=False):
+        # The docker API has no force flag for networks.
         self._cli.networks.get(key).remove()
 
     def open_details(self, network):
@@ -641,6 +691,11 @@ class VolumesScreen(ResourceScreen):
     HEADING = 'Volumes'
     ITEM_NAME = 'volume'
     COLUMNS = ('Name', 'Driver', 'Mountpoint')
+    ACTIONS = (
+        ('Remove', 'delete', 'd'),
+        ('Force remove', 'force_delete', ''),
+        ('Details', 'details', 'enter'),
+    )
 
     def list_items(self):
         return self._cli.volumes.list()
@@ -655,8 +710,8 @@ class VolumesScreen(ResourceScreen):
     def get_item(self, key):
         return self._cli.volumes.get(key)
 
-    def remove_item(self, key):
-        self._cli.volumes.get(key).remove()
+    def remove_item(self, key, force=False):
+        self._cli.volumes.get(key).remove(force=force)
 
     def open_details(self, volume):
         self.context().set_details_screen(volume, 'Volume details', 'set_volumes_screen')
@@ -665,6 +720,7 @@ class VolumesScreen(ResourceScreen):
 class DetailsScreen(Screen, ScreenStateBase):
     BINDINGS = [
         Binding("escape", "exit", "Go back"),
+        Binding("a", "actions", "Actions"),
         Binding("slash", "search", "Search"),
         Binding("s", "sidebar", "Sidebar"),
     ]
@@ -733,6 +789,51 @@ class ErrorScreen(Screen):
 
     def compose(self):
         yield Grid(Label(self.__message, id='error-label'), id="error-screen")
+
+
+class ActionsMenu(ModalScreen[str]):
+    """Menu of the actions a screen offers for the current selection.
+
+    Dismisses with the chosen action name, or None when cancelled."""
+
+    BINDINGS = [
+        Binding("escape,q", "cancel", "Cancel"),
+        Binding("j", "cursor_down", "Down", show=False),
+        Binding("k", "cursor_up", "Up", show=False),
+    ]
+
+    def __init__(self, title, actions):
+        super().__init__(id='actions-menu')
+        self.__title = title
+        self.__actions = actions
+
+    def compose(self):
+        with Grid(id='actions-dialog'):
+            yield Label(self.__title, id='actions-title')
+            with ListView(id='actions-list'):
+                for label, name, key in self.__actions:
+                    yield ListItem(
+                        Horizontal(
+                            Label(label, classes='action-label'),
+                            Label(key, classes='action-key'),
+                        ),
+                        id=f'action-{name}',
+                    )
+
+    def on_mount(self):
+        self.query_one('#actions-list', ListView).focus()
+
+    def action_cancel(self):
+        self.dismiss(None)
+
+    def action_cursor_down(self):
+        self.query_one('#actions-list', ListView).action_cursor_down()
+
+    def action_cursor_up(self):
+        self.query_one('#actions-list', ListView).action_cursor_up()
+
+    def on_list_view_selected(self, event: ListView.Selected):
+        self.dismiss(event.item.id.removeprefix('action-'))
 
 
 class ConfirmScreen(ModalScreen[bool]):

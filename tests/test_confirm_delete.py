@@ -15,7 +15,7 @@ async def test_delete_asks_for_confirmation(client):
         await pilot.pause()
         assert app.screen.id == 'confirm-screen'
         question = str(app.screen.query_one('#question', Label).content)
-        assert 'Delete 1 image' in question
+        assert 'Remove 1 image' in question
         assert client.images.removed == []
 
 
@@ -27,7 +27,7 @@ async def test_confirming_deletes(client):
         await pilot.press('space')
         await pilot.press('d')
         await pilot.pause()
-        assert 'Delete 2 images' in str(app.screen.query_one('#question', Label).content)
+        assert 'Remove 2 images' in str(app.screen.query_one('#question', Label).content)
         await pilot.press('y')
         await pilot.pause()
         assert app.screen.id == 'images-screen'

@@ -84,6 +84,54 @@ class DockerPalApp(App):
         align: center middle;
     }
 
+    ActionsMenu {
+        align: center middle;
+    }
+
+    #actions-dialog {
+        grid-size: 1;
+        grid-rows: 3 1fr;
+        padding: 0 1;
+        width: 40;
+        height: auto;
+        max-height: 80%;
+        border: thick $primary 80%;
+        background: $surface;
+    }
+
+    #actions-title {
+        width: 1fr;
+        content-align: center middle;
+        text-style: bold;
+    }
+
+    #actions-list {
+        height: auto;
+        background: $surface;
+    }
+
+    #actions-list ListItem {
+        height: 1;
+        padding: 0 1;
+    }
+
+    #actions-list ListItem Horizontal {
+        height: 1;
+    }
+
+    .action-label {
+        width: 1fr;
+    }
+
+    .action-key {
+        dock: right;
+        color: $foreground 60%;
+    }
+
+    #actions-list ListItem.-highlight .action-key {
+        color: $block-cursor-foreground;
+    }
+
     #dialog {
         grid-size: 2;
         grid-gutter: 1 2;
