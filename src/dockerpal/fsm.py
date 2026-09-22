@@ -14,12 +14,15 @@ from rich.style import Style
 import json
 
 
-def compose_sidebar():
-    with ListView(id='sidebar'):
-        yield ListItem(Label('Images'), id='images-sidebar-item')
-        yield ListItem(Label('Containers'), id='containers-sidebar-item')
-        yield ListItem(Label('Networks'), id='networks-sidebar-item')
-        yield ListItem(Label('Volumes'), id='volumes-sidebar-item')
+SIDEBAR_ITEMS = ('images', 'containers', 'networks', 'volumes')
+
+
+def compose_sidebar(current=None):
+    """Yield the sidebar list, highlighting ``current`` (e.g. 'containers')."""
+    index = SIDEBAR_ITEMS.index(current) if current in SIDEBAR_ITEMS else 0
+    with ListView(id='sidebar', initial_index=index):
+        for name in SIDEBAR_ITEMS:
+            yield ListItem(Label(name.capitalize()), id=f'{name}-sidebar-item')
 
 
 class ScreenStateBase:
@@ -36,7 +39,8 @@ class ScreenStateBase:
     def on_state_exit(self):
         pass
 
-    def render(self):
+    def focus_main(self):
+        """Give focus back to the screen's main widget (after the sidebar hides)."""
         pass
 
     def context(self):
@@ -120,10 +124,6 @@ class ScreenFSM:
             self.notify(str(e), severity='error')
 
 
-    def send_event(self, event):
-        self.__event_bus.publish(event)
-
-    
     def set_subtitle(self, subtitle):
         self.__app().sub_title = subtitle
 
@@ -137,16 +137,25 @@ class ScreenFSM:
 
 
     def toggle_sidebar(self):
-        app = self.__app()
-        sidebar = app.get_child_by_id('sidebar')
-        if sidebar.styles.display == 'none':
-            sidebar.styles.display = 'block'
-            if sidebar.can_focus:
-                sidebar.focus()
+        if self.is_sidebar_visible():
+            self.hide_sidebar()
         else:
-            sidebar.styles.display = 'none'
+            self.show_sidebar()
 
-        return sidebar.styles.display == 'block'
+        return self.is_sidebar_visible()
+
+
+    def show_sidebar(self):
+        sidebar = self.__app().get_child_by_id('sidebar')
+        sidebar.styles.display = 'block'
+        if sidebar.can_focus:
+            sidebar.focus()
+
+
+    def hide_sidebar(self):
+        sidebar = self.__app().get_child_by_id('sidebar')
+        sidebar.styles.display = 'none'
+        self.__state.focus_main()
 
 
     def is_sidebar_visible(self):
@@ -247,7 +256,7 @@ class ResourceScreen(Screen, ScreenStateBase):
         self.__update_footer(len(items))
 
     def compose(self):
-        yield from compose_sidebar()
+        yield from compose_sidebar(self.SCREEN_ID.removesuffix('-screen'))
         yield Header()
         yield self._table
         with Horizontal(id="table-footer"):
@@ -269,8 +278,11 @@ class ResourceScreen(Screen, ScreenStateBase):
     def on_state_key(self, event: events.Key):
         context = self.context()
         match event.key:
-            case 'escape' | 'q':
-                context.exit()
+            case 'escape':
+                if context.is_sidebar_visible():
+                    context.hide_sidebar()
+                else:
+                    context.exit()
             case 'enter':
                 if context.is_sidebar_visible():
                     context.activate_sidebar_item()
@@ -364,6 +376,9 @@ class ResourceScreen(Screen, ScreenStateBase):
         self.context().toggle_sidebar()
 
     def on_mount(self):
+        self.focus_main()
+
+    def focus_main(self):
         self._table.focus()
 
     def __set_cursor_row(self, row_index):
@@ -545,6 +560,9 @@ class DetailsScreen(Screen, ScreenStateBase):
         self.__back = back
 
     def on_mount(self):
+        self.focus_main()
+
+    def focus_main(self):
         self.get_child_by_id('details').focus()
 
     def on_state_enter(self, data=None):
@@ -552,7 +570,7 @@ class DetailsScreen(Screen, ScreenStateBase):
         self.context().switch_screen(self)
 
     def compose(self):
-        yield from compose_sidebar()
+        yield from compose_sidebar(self.__back.removeprefix('set_').removesuffix('_screen'))
         yield Header()
         yield Footer()
         try:
@@ -573,7 +591,10 @@ class DetailsScreen(Screen, ScreenStateBase):
                 if context.is_sidebar_visible():
                     context.activate_sidebar_item()
             case 'escape':
-                getattr(context, self.__back)()
+                if context.is_sidebar_visible():
+                    context.hide_sidebar()
+                else:
+                    getattr(context, self.__back)()
 
 
 class SplashScreen(Screen):
